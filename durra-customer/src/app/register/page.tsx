@@ -89,7 +89,7 @@ export default function RegisterPage() {
               <div style={{ fontSize: 12, color: "#9B7E60", marginBottom: 8, textAlign: "right" }}>نوع الخدمة</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
                 {TYPES.map(t => (
-                  <button key={t} onClick={() => setType(t)} style={{ padding: "7px 14px", borderRadius: 50, border: "none", cursor: "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 600, fontSize: 12, background: type === t ? "linear-gradient(135deg, #C9A96E, #E8D5A3)" : "#FAF7F2", color: type === t ? "#2C1A0A" : "#9B7E60", border: `1px solid ${type === t ? "#C9A96E" : "#E8DDD0"}` }}>{t}</button>
+                  <button key={t} onClick={() => setType(t)} style={{ padding: "7px 14px", borderRadius: 50, border: `1px solid ${type === t ? "#C9A96E" : "#E8DDD0"}`, cursor: "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 600, fontSize: 12, background: type === t ? "linear-gradient(135deg, #C9A96E, #E8D5A3)" : "#FAF7F2", color: type === t ? "#2C1A0A" : "#9B7E60" }}>{t}</button>
                 ))}
               </div>
             </div>
