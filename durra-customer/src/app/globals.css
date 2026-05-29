@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cream:      #FAF7F2;
+  --cream2:     #F2EDE4;
+  --cream3:     #EDE4D6;
+  --gold:       #C9A96E;
+  --gold2:      #E8D5A3;
+  --gold-dark:  #A07840;
+  --dark:       #1A0E05;
+  --dark2:      #2C1A0A;
+  --dark3:      #3D2810;
+  --text:       #2C1A0A;
+  --text2:      #6B4F35;
+  --text3:      #9B7E60;
+  --white:      #FFFFFF;
+  --border:     #E8DDD0;
+  --shadow:     rgba(44,26,10,0.08);
+  --r-sm:       12px;
+  --r-md:       16px;
+  --r-lg:       24px;
+  --r-xl:       32px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--cream);
+  color: var(--text);
+  font-family: 'Tajawal', sans-serif;
+  direction: rtl;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: var(--cream2); }
+::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 10px; }
+
+/* ── Utility ── */
+.gold { color: var(--gold); }
+.playfair { font-family: 'Playfair Display', serif; }
+.playfair-italic { font-family: 'Playfair Display', serif; font-style: italic; }
+
+/* ── Card ── */
+.card {
+  background: var(--white);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 16px var(--shadow);
+}
+
+/* ── Gold Button ── */
+.btn-gold {
+  background: linear-gradient(135deg, #C9A96E, #E8D5A3, #C9A96E);
+  background-size: 200% 200%;
+  color: var(--dark);
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  border-radius: var(--r-md);
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.btn-gold:hover { background-position: right center; box-shadow: 0 4px 20px rgba(201,169,110,0.4); }
+
+/* ── Ornament ── */
+.ornament::before, .ornament::after {
+  content: '—';
+  color: var(--gold);
+  opacity: 0.5;
+  margin: 0 8px;
+}
