@@ -25,8 +25,8 @@ export default function ChangePasswordPage() {
     setLoading(true); setError("");
     try {
       const cred = EmailAuthProvider.credential(user.email, current);
-      await reauthenticateWithCredential(user, cred);
-      await updatePassword(user, newPass);
+      await reauthenticateWithCredential(user as any, cred);
+      await updatePassword(user as any, newPass);
       setDone(true);
       setTimeout(() => router.push("/profile"), 2000);
     } catch (e: any) {
