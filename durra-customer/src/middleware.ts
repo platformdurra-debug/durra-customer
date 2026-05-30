@@ -13,7 +13,7 @@ const APPS: Record<string, string> = {
 const ALLOWED_ROLES = ["customer"];
 
 const PUBLIC_PATHS = [
-  "/",
+
   "/auth",
   "/browse",
   "/search",
