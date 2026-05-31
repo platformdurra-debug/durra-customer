@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { Booking } from "@/types";
-import { collection, addDoc, getDocs, query, where, updateDoc, doc } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 interface BookingStore {
@@ -15,6 +15,20 @@ export const useBookingStore = create<BookingStore>((set) => ({
 
   createBooking: async (booking) => {
     const ref = await addDoc(collection(db, "bookings"), { ...booking, createdAt: new Date() });
+
+    // إشعار للمعرضة
+    if (booking.sellerId) {
+      await addDoc(collection(db, "notifications"), {
+        userId: booking.sellerId,
+        type: "new_booking",
+        title: "🎉 طلب تأجير جديد!",
+        body: "وصل طلب تأجير جديد لأحد فساتينك",
+        bookingId: ref.id,
+        read: false,
+        createdAt: serverTimestamp(),
+      });
+    }
+
     return ref.id;
   },
 
