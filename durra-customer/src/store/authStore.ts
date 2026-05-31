@@ -37,6 +37,8 @@ function redirectToCorrectApp(role: string) {
   }
 }
 
+let unsubscribe: (() => void) | null = null;
+
 interface AuthStore {
   user: User | null; loading: boolean; error: string | null;
   login: (email: string, password: string) => Promise<void>;
@@ -46,53 +48,58 @@ interface AuthStore {
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
-  user: null, loading: true, error: null,
+  user: null, loading: false, error: null,
 
   login: async (email, password) => {
     try {
-      set({ error: null });
+      set({ error: null, loading: true });
       const result = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, "users", result.user.uid));
       const userData = snap.data() as User;
-      set({ user: userData });
       setRoleCookie(userData.role);
+      set({ user: userData, loading: false });
       redirectToCorrectApp(userData.role);
     } catch (e: any) {
       const msg = e.code === "auth/wrong-password" || e.code === "auth/user-not-found"
         ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
         : e.code === "auth/too-many-requests" ? "محاولات كثيرة — انتظري قليلاً" : e.message;
-      set({ error: msg });
+      set({ error: msg, loading: false });
     }
   },
 
   register: async (email, password, name, phone) => {
     try {
-      set({ error: null });
+      set({ error: null, loading: true });
       const result = await createUserWithEmailAndPassword(auth, email, password);
       const newUser: User = { uid: result.user.uid, email, displayName: name, phone, role: "customer", createdAt: new Date(), points: 0, level: "normal" };
       await setDoc(doc(db, "users", result.user.uid), newUser);
-      set({ user: newUser });
       setRoleCookie("customer");
+      set({ user: newUser, loading: false });
     } catch (e: any) {
       const msg = e.code === "auth/email-already-in-use" ? "هذا البريد مسجّل مسبقاً" : e.code === "auth/weak-password" ? "كلمة المرور ضعيفة" : e.message;
-      set({ error: msg });
+      set({ error: msg, loading: false });
     }
   },
 
   logout: async () => {
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     await signOut(auth);
     clearRoleCookie();
-    set({ user: null });
+    set({ user: null, loading: false });
     if (typeof window !== "undefined") window.location.href = "/auth";
   },
 
   init: () => {
-    onAuthStateChanged(auth, async (firebaseUser) => {
+    if (unsubscribe) return;
+    unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
           const snap = await getDoc(doc(db, "users", firebaseUser.uid));
-          if (snap.exists()) { const u = snap.data() as User; set({ user: u, loading: false }); setRoleCookie(u.role); }
-          else set({ user: null, loading: false });
+          if (snap.exists()) {
+            const u = snap.data() as User;
+            setRoleCookie(u.role);
+            set({ user: u, loading: false });
+          } else set({ user: null, loading: false });
         } catch { set({ user: null, loading: false }); }
       } else { set({ user: null, loading: false }); clearRoleCookie(); }
     });
