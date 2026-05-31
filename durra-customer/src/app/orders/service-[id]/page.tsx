@@ -16,18 +16,19 @@ const STATUS: Record<string, { label: string; color: string; bg: string }> = {
 
 export default function ServiceOrderDetailPage() {
   const params = useParams();
-  // الـ id يجي بصيغة "service-XXXX" — نشيل البادئة
-  const rawId = params.id as string;
-  const id = rawId.startsWith("service-") ? rawId.replace("service-", "") : rawId;
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // استخرج الـ id بأمان
+  const rawId = typeof params?.id === "string" ? params.id : "";
+  const id = rawId.startsWith("service-") ? rawId.replace("service-", "") : rawId;
+
   useEffect(() => { if (!authLoading && !user) router.push("/auth"); }, [user, authLoading]);
 
   useEffect(() => {
-    if (authLoading || !user?.uid) return;
+    if (authLoading || !user?.uid || !id) return;
     getDoc(doc(db, "serviceBookings", id))
       .then(snap => { if (snap.exists()) setOrder({ id: snap.id, ...snap.data() }); setLoading(false); })
       .catch(() => setLoading(false));
@@ -46,13 +47,9 @@ export default function ServiceOrderDetailPage() {
   );
 
   const s = STATUS[order.status] || STATUS.pending;
-  const bookingDate = order.date || "—";
-  const bookingTime = order.time || "—";
 
   return (
     <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 40, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
-
-      {/* Header */}
       <div style={{ background: "#fff", padding: "52px 20px 16px", borderBottom: "1px solid #E8DDD0" }}>
         <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9B7E60" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -65,8 +62,6 @@ export default function ServiceOrderDetailPage() {
       </div>
 
       <div style={{ padding: "20px" }}>
-
-        {/* Provider Info */}
         {order.providerName && (
           <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #E8DDD0", padding: "14px 18px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 20 }}>🏪</span>
@@ -77,13 +72,12 @@ export default function ServiceOrderDetailPage() {
           </div>
         )}
 
-        {/* Order Details */}
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #E8DDD0", padding: "20px", marginBottom: 14, boxShadow: "0 2px 12px rgba(44,26,10,0.06)" }}>
           {[
             { label: "رقم الطلب",    value: `#${id.slice(0, 8).toUpperCase()}` },
             { label: "الخدمة",       value: order.productName || "—" },
-            { label: "تاريخ الموعد", value: bookingDate },
-            { label: "وقت الموعد",   value: bookingTime },
+            { label: "تاريخ الموعد", value: order.date || "—" },
+            { label: "وقت الموعد",   value: order.time || "—" },
             order.notes ? { label: "ملاحظات", value: order.notes } : null,
             { label: "المبلغ الإجمالي", value: `${order.totalPrice} د.ب`, bold: true, gold: true },
             { label: "حالة الدفع", value: order.paymentStatus === "held" ? "محتجز 🔒" : order.paymentStatus === "paid" ? "مدفوع ✓" : "معلّق" },
@@ -95,7 +89,6 @@ export default function ServiceOrderDetailPage() {
           ))}
         </div>
 
-        {/* Review button if completed */}
         {order.status === "completed" && (
           <Link href={`/services/${order.providerId}/review`}>
             <button style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1A0A", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 12 }}>
