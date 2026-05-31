@@ -58,7 +58,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
       const userData = snap.data() as User;
       setRoleCookie(userData.role);
       set({ user: userData, loading: false });
-      redirectToCorrectApp(userData.role);
+      // redirect after login
+      if (userData.role === "customer") {
+        window.location.replace("/");
+      } else {
+        redirectToCorrectApp(userData.role);
+      }
     } catch (e: any) {
       const msg = e.code === "auth/wrong-password" || e.code === "auth/user-not-found"
         ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
@@ -75,6 +80,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       await setDoc(doc(db, "users", result.user.uid), newUser);
       setRoleCookie("customer");
       set({ user: newUser, loading: false });
+      window.location.replace("/");
     } catch (e: any) {
       const msg = e.code === "auth/email-already-in-use" ? "هذا البريد مسجّل مسبقاً" : e.code === "auth/weak-password" ? "كلمة المرور ضعيفة" : e.message;
       set({ error: msg, loading: false });
