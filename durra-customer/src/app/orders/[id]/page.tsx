@@ -44,10 +44,17 @@ export default function OrderDetailPage() {
 
   const s = STATUS[order.status] || STATUS.pending;
   const startDate = order.startDate?.seconds ? new Date(order.startDate.seconds * 1000).toLocaleDateString("ar-BH") : "—";
-  const endDate = order.endDate?.seconds ? new Date(order.endDate.seconds * 1000).toLocaleDateString("ar-BH") : "—";
+  const endDate   = order.endDate?.seconds   ? new Date(order.endDate.seconds   * 1000).toLocaleDateString("ar-BH") : "—";
+
+  const rentalPrice  = order.rentalPrice  || order.totalPrice || 0;
+  const deliveryPrice = order.deliveryPrice || 0;
+  const depositAmount = order.depositAmount || 0;
+  const totalPrice   = order.totalPrice   || 0;
 
   return (
     <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 40, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
+
+      {/* Header */}
       <div style={{ background: "#fff", padding: "52px 20px 16px", borderBottom: "1px solid #E8DDD0" }}>
         <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9B7E60" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -60,21 +67,65 @@ export default function OrderDetailPage() {
       </div>
 
       <div style={{ padding: "20px" }}>
+
+        {/* Order Info */}
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #E8DDD0", padding: "20px", marginBottom: 14, boxShadow: "0 2px 12px rgba(44,26,10,0.06)" }}>
           {[
             { label: "رقم الطلب",      value: `#${(id as string).slice(0, 8).toUpperCase()}` },
             { label: "تاريخ الاستلام", value: startDate },
             { label: "تاريخ الإرجاع", value: endDate },
-            { label: "المبلغ الإجمالي", value: `${order.totalPrice} د.ب`, bold: true, gold: true },
-            { label: "حالة الدفع",     value: order.paymentStatus === "held" ? "محتجز 🔒" : order.paymentStatus === "paid" ? "مدفوع ✓" : "معلّق" },
-          ].map(item => (
+            order.size ? { label: "المقاس", value: order.size } : null,
+            { label: "حالة الدفع", value: order.paymentStatus === "held" ? "محتجز 🔒" : order.paymentStatus === "paid" ? "مدفوع ✓" : "معلّق" },
+          ].filter(Boolean).map((item: any) => (
             <div key={item.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #F2EDE4" }}>
-              <span style={{ fontSize: item.bold ? 18 : 14, fontWeight: item.bold ? 800 : 400, color: item.gold ? "#A07840" : "#2C1A0A" }}>{item.value}</span>
+              <span style={{ fontSize: 14, color: "#2C1A0A" }}>{item.value}</span>
               <span style={{ fontSize: 12, color: "#9B7E60" }}>{item.label}</span>
             </div>
           ))}
         </div>
 
+        {/* Price Breakdown */}
+        <div style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #C9A96E", padding: "20px", marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1A0A", marginBottom: 14, textAlign: "right" }}>تفاصيل السعر</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 14, color: "#2C1A0A" }}>{rentalPrice} د.ب</span>
+              <span style={{ fontSize: 13, color: "#9B7E60" }}>إيجار الفستان</span>
+            </div>
+            {deliveryPrice > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 14, color: "#2C1A0A" }}>{deliveryPrice} د.ب</span>
+                <span style={{ fontSize: 13, color: "#9B7E60" }}>🚚 رسوم التوصيل</span>
+              </div>
+            )}
+            {depositAmount > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 14, color: "#2C1A0A" }}>{depositAmount} د.ب</span>
+                <span style={{ fontSize: 13, color: "#9B7E60" }}>🛡️ مبلغ التأمين</span>
+              </div>
+            )}
+            <div style={{ borderTop: "1px solid #EDE8DF", paddingTop: 10, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 18, fontWeight: 800, color: "#A07840" }}>{totalPrice} د.ب</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#2C1A0A" }}>الإجمالي</span>
+            </div>
+            {depositAmount > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", borderRadius: 10, background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#065F46" }}>{totalPrice - depositAmount} د.ب</span>
+                <span style={{ fontSize: 12, color: "#065F46" }}>المبلغ الفعلي (بعد استرداد التأمين)</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Deposit note */}
+        {depositAmount > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, background: "#FEF9EC", border: "1px solid #F5D88A", marginBottom: 14 }}>
+            <span>ℹ️</span>
+            <span style={{ fontSize: 12, color: "#92580A" }}>مبلغ التأمين {depositAmount} د.ب يُسترد كاملاً عند إرجاع الفستان سليماً</span>
+          </div>
+        )}
+
+        {/* Review button */}
         {order.status === "completed" && (
           <Link href={`/dress/${order.dressId}/review`}>
             <button style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1A0A", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 12 }}>
