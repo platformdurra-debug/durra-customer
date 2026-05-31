@@ -10,6 +10,7 @@ export default function Footer() {
         <Link href="/privacy" style={{ fontSize: 11, color: "rgba(201,169,110,0.6)", textDecoration: "none" }}>سياسة الخصوصية</Link>
         <Link href="/cancellation" style={{ fontSize: 11, color: "rgba(201,169,110,0.6)", textDecoration: "none" }}>سياسة الإلغاء</Link>
         <Link href="/contact" style={{ fontSize: 11, color: "rgba(201,169,110,0.6)", textDecoration: "none" }}>تواصل معنا</Link>
+        <Link href="/join" style={{ fontSize: 11, color: "rgba(201,169,110,0.6)", textDecoration: "none" }}>انضمي كمعرِضة ✦</Link>
       </div>
       <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)" }}>© 2025 درّة — جميع الحقوق محفوظة</div>
     </footer>
