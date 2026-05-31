@@ -11,16 +11,23 @@ export default function FavoritesPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [favorites, setFavorites] = useState<any[]>([]);
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] = useState(false);
 
   useEffect(() => { if (!loading && !user) router.push("/auth"); }, [user, loading]);
-  useEffect(() => {
-    if (!user) return;
-    getDocs(query(collection(db, "favorites"), where("userId", "==", user.uid)))
-      .then(snap => { setFavorites(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setFetching(false); });
-  }, [user]);
 
-  if (fetching) return <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>;
+  useEffect(() => {
+    if (loading || !user?.uid) return;
+    setFetching(true);
+    getDocs(query(collection(db, "favorites"), where("userId", "==", user.uid)))
+      .then(snap => { setFavorites(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setFetching(false); })
+      .catch(() => setFetching(false));
+  }, [user, loading]);
+
+  if (loading || fetching) return (
+    <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div>
+    </div>
+  );
 
   return (
     <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 90, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
@@ -32,7 +39,9 @@ export default function FavoritesPage() {
           <div style={{ gridColumn: "span 2", textAlign: "center", padding: "60px 20px" }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>❤️</div>
             <div style={{ fontSize: 14, color: "#9B7E60" }}>لا توجد عناصر مفضلة</div>
-            <Link href="/browse"><button style={{ background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1A0A", border: "none", borderRadius: 50, padding: "12px 24px", fontFamily: "Tajawal, sans-serif", fontWeight: 700, cursor: "pointer", marginTop: 16 }}>تصفحي الفساتين</button></Link>
+            <Link href="/browse">
+              <button style={{ background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1A0A", border: "none", borderRadius: 50, padding: "12px 24px", fontFamily: "Tajawal, sans-serif", fontWeight: 700, cursor: "pointer", marginTop: 16 }}>تصفحي الفساتين</button>
+            </Link>
           </div>
         ) : favorites.map(f => (
           <Link href={`/dress/${f.dressId}`} key={f.id} style={{ textDecoration: "none" }}>
