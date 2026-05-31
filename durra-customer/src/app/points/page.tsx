@@ -12,11 +12,12 @@ export default function PointsPage() {
   const [points, setPoints] = useState(0);
   const [level, setLevel] = useState("عادي");
   const [history, setHistory] = useState<any[]>([]);
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] = useState(false);
 
   useEffect(() => { if (!loading && !user) router.push("/auth"); }, [user, loading]);
   useEffect(() => {
-    if (!user) return;
+    if (loading || !user?.uid) return;
+    setFetching(true);
     Promise.all([
       getDoc(doc(db, "users", user.uid)),
       getDocs(query(collection(db, "points"), where("userId", "==", user.uid), orderBy("createdAt", "desc"))),
@@ -24,13 +25,13 @@ export default function PointsPage() {
       if (userSnap.exists()) { setPoints(userSnap.data().points || 0); setLevel(userSnap.data().level || "عادي"); }
       setHistory(pointsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
       setFetching(false);
-    });
-  }, [user]);
+    }).catch(err => { console.error(err); setFetching(false); });
+  }, [user, loading]);
 
   const nextLevel = level === "عادي" ? { name: "ذهبي ⭐", needed: 500 } : level === "gold" ? { name: "VIP 💎", needed: 1000 } : null;
   const progress = nextLevel ? Math.min((points / nextLevel.needed) * 100, 100) : 100;
 
-  if (fetching) return <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>;
+  if (loading || fetching) return <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>;
 
   return (
     <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 90, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
