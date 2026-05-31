@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
-import { addDoc } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, query, where, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,7 +10,7 @@ import { ArrowRight } from "lucide-react";
 export default function ServiceBookPage() {
   const { id } = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { createSession } = usePayTabs();
 
   const [provider, setProvider] = useState<any>(null);
@@ -20,11 +19,14 @@ export default function ServiceBookPage() {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [notes, setNotes] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
+  const [loading2, setLoading2] = useState(false);
+  const [fetching, setFetching] = useState(false);
+
+  useEffect(() => { if (!loading && !user) router.push("/auth"); }, [user, loading]);
 
   useEffect(() => {
-    if (!user) return;
+    if (loading || !user?.uid) return;
+    setFetching(true);
     Promise.all([
       getDoc(doc(db, "providers", id as string)),
       getDocs(query(collection(db, "providerProducts"), where("providerId", "==", id), where("active", "==", true))),
@@ -35,12 +37,12 @@ export default function ServiceBookPage() {
       if (prods.length > 0) setSelectedProduct(prods[0]);
       setFetching(false);
     }).catch(() => setFetching(false));
-  }, [id, user]);
+  }, [id, user, loading]);
 
   const handleBook = async () => {
     if (!user) { router.push("/auth"); return; }
     if (!date || !time || !selectedProduct) { alert("أكملي جميع الحقول"); return; }
-    setLoading(true);
+    setLoading2(true);
     try {
       const ref = await addDoc(collection(db, "serviceBookings"), {
         customerId: user.uid,
@@ -51,9 +53,7 @@ export default function ServiceBookPage() {
         providerName: provider?.name || "",
         productId: selectedProduct.id,
         productName: selectedProduct.name,
-        date,
-        time,
-        notes,
+        date, time, notes,
         totalPrice: selectedProduct.price,
         providerAmount: Math.round(selectedProduct.price * 0.7),
         commission: Math.round(selectedProduct.price * 0.3),
@@ -76,10 +76,9 @@ export default function ServiceBookPage() {
         router.push("/orders");
       }
     } catch (e) {
-      console.error(e);
       alert("حدث خطأ، حاولي مرة ثانية");
     } finally {
-      setLoading(false);
+      setLoading2(false);
     }
   };
 
@@ -91,7 +90,7 @@ export default function ServiceBookPage() {
     textAlign: "right", direction: "rtl",
   };
 
-  if (fetching) return (
+  if (loading || fetching) return (
     <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div>
     </div>
@@ -105,8 +104,6 @@ export default function ServiceBookPage() {
 
   return (
     <div style={{ minHeight: "100vh", paddingBottom: 120, background: "#FAF7F2", fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
-
-      {/* Header */}
       <div style={{ background: "#fff", padding: "52px 20px 16px", borderBottom: "1px solid #EDE8DF", display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer" }}>
           <ArrowRight size={20} color="#2C1810" />
@@ -115,14 +112,9 @@ export default function ServiceBookPage() {
       </div>
 
       <div style={{ padding: "20px" }}>
-
-        {/* Provider Info */}
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #EDE8DF", padding: "16px 18px", marginBottom: 16, display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ width: 52, height: 52, borderRadius: 14, overflow: "hidden", background: "#FAF7F2", flexShrink: 0 }}>
-            {provider.logoImage
-              ? <img src={provider.logoImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🏪</div>
-            }
+            {provider.logoImage ? <img src={provider.logoImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🏪</div>}
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: "#2C1810" }}>{provider.name}</div>
@@ -130,7 +122,6 @@ export default function ServiceBookPage() {
           </div>
         </div>
 
-        {/* Select Service */}
         {products.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: "#6B5744", fontWeight: 600, marginBottom: 10, textAlign: "right" }}>اختاري الخدمة</div>
@@ -152,19 +143,15 @@ export default function ServiceBookPage() {
           </div>
         )}
 
-        {/* Date */}
         <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 6, textAlign: "right" }}>تاريخ الموعد</div>
         <input type="date" style={inp} value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split("T")[0]} />
 
-        {/* Time */}
         <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 6, textAlign: "right" }}>وقت الموعد</div>
         <input type="time" style={inp} value={time} onChange={e => setTime(e.target.value)} />
 
-        {/* Notes */}
         <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 6, textAlign: "right" }}>ملاحظات (اختياري)</div>
-        <textarea style={{ ...inp, height: 80, resize: "none", marginBottom: 16 }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="أي تفاصيل إضافية..." />
+        <textarea style={{ ...inp, height: 80, resize: "none" }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="أي تفاصيل إضافية..." />
 
-        {/* Summary */}
         {selectedProduct && (
           <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #C9A96E", padding: "16px 18px", marginBottom: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1810", marginBottom: 12, textAlign: "right" }}>ملخص الحجز</div>
@@ -187,18 +174,16 @@ export default function ServiceBookPage() {
           </div>
         )}
 
-        {/* Security note */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, background: "#F0FDF4", border: "1px solid #BBF7D0", marginBottom: 16 }}>
           <span>🔒</span>
           <span style={{ fontSize: 12, color: "#065F46" }}>دفع آمن عبر PayTabs</span>
         </div>
       </div>
 
-      {/* Bottom Button */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 28px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
-        <button onClick={handleBook} disabled={loading || !date || !time || !selectedProduct}
-          style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading || !date || !time ? "not-allowed" : "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !date || !time ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !date || !time ? "#9B7E60" : "#2C1810", opacity: loading ? 0.7 : 1, transition: "all 0.2s", boxShadow: date && time ? "0 4px 16px rgba(201,169,110,0.3)" : "none" }}>
-          {loading ? "جاري التوجيه للدفع..." : `ادفعي الآن${selectedProduct ? ` — ${selectedProduct.price} د.ب` : ""}`}
+        <button onClick={handleBook} disabled={loading2 || !date || !time || !selectedProduct}
+          style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading2 || !date || !time ? "not-allowed" : "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !date || !time ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !date || !time ? "#9B7E60" : "#2C1810", opacity: loading2 ? 0.7 : 1, transition: "all 0.2s", boxShadow: date && time ? "0 4px 16px rgba(201,169,110,0.3)" : "none" }}>
+          {loading2 ? "جاري التوجيه للدفع..." : `ادفعي الآن${selectedProduct ? ` — ${selectedProduct.price} د.ب` : ""}`}
         </button>
       </div>
     </div>
