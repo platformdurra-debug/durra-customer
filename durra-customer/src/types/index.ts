@@ -34,12 +34,18 @@ export interface Booking {
   sellerId: string;
   startDate: Date;
   endDate: Date;
+  size?: string;
+  rentalPrice?: number;
+  deliveryPrice?: number;
+  depositAmount?: number;
   totalPrice: number;
   commission: number;
   sellerAmount: number;
+  tranRef?: string;
   status: "pending" | "confirmed" | "active" | "completed" | "cancelled";
-  paymentStatus: "pending" | "held" | "released" | "refunded";
+  paymentStatus: "pending" | "held" | "released" | "refunded" | "failed";
   createdAt: Date;
+  updatedAt?: Date;
 }
 
 // ── المزوّد ──
