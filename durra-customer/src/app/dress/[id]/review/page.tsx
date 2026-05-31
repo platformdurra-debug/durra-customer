@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { addDoc, collection, serverTimestamp, doc, updateDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,17 +7,19 @@ import { useParams, useRouter } from "next/navigation";
 
 export default function ReviewPage() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading2, setLoading2] = useState(false);
   const [done, setDone] = useState(false);
+
+  useEffect(() => { if (!loading && !user) router.push("/auth"); }, [user, loading]);
 
   const handleSubmit = async () => {
     if (!user || rating === 0 || !comment.trim()) return;
-    setLoading(true);
+    setLoading2(true);
     await addDoc(collection(db, "reviews"), {
       userId: user.uid, targetId: id, type: "dress",
       rating, comment, createdAt: serverTimestamp(),
@@ -45,7 +47,6 @@ export default function ReviewPage() {
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 700, color: "#2C1A0A", textAlign: "center", marginBottom: 8 }}>قيّمي تجربتك</div>
           <div style={{ fontSize: 13, color: "#9B7E60", textAlign: "center", marginBottom: 32 }}>رأيك يساعد العرايس الثانية ✨</div>
 
-          {/* Stars */}
           <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 28 }}>
             {[1,2,3,4,5].map(star => (
               <button key={star} onClick={() => setRating(star)} onMouseEnter={() => setHover(star)} onMouseLeave={() => setHover(0)}
@@ -61,9 +62,9 @@ export default function ReviewPage() {
               style={{ width: "100%", height: 120, padding: "12px", borderRadius: 12, border: "1.5px solid #E8DDD0", fontFamily: "Tajawal, sans-serif", fontSize: 14, color: "#2C1A0A", background: "#FAF7F2", outline: "none", resize: "none", textAlign: "right", direction: "rtl" }} />
           </div>
 
-          <button onClick={handleSubmit} disabled={loading || rating === 0 || !comment.trim()}
-            style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, transition: "all 0.2s", background: rating === 0 || !comment.trim() ? "#EDE4D6" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: rating === 0 || !comment.trim() ? "#9B7E60" : "#2C1A0A", opacity: loading ? 0.7 : 1 }}>
-            {loading ? "جاري الإرسال..." : "إرسال التقييم"}
+          <button onClick={handleSubmit} disabled={loading2 || rating === 0 || !comment.trim()}
+            style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, transition: "all 0.2s", background: rating === 0 || !comment.trim() ? "#EDE4D6" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: rating === 0 || !comment.trim() ? "#9B7E60" : "#2C1A0A", opacity: loading2 ? 0.7 : 1 }}>
+            {loading2 ? "جاري الإرسال..." : "إرسال التقييم"}
           </button>
         </div>
       )}
