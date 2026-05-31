@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where, orderBy, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
@@ -12,12 +12,14 @@ export default function VipPage() {
   const router = useRouter();
   const [dresses, setDresses] = useState<any[]>([]);
   const [points, setPoints] = useState(0);
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] = useState(false);
   const isVip = points >= 1000;
 
   useEffect(() => { if (!loading && !user) router.push("/auth"); }, [user, loading]);
+
   useEffect(() => {
-    if (!user) return;
+    if (loading || !user?.uid) return;
+    setFetching(true);
     Promise.all([
       getDocs(query(collection(db, "dresses"), where("approved", "==", true), where("isVip", "==", true))),
       getDoc(doc(db, "users", user.uid)),
@@ -25,14 +27,13 @@ export default function VipPage() {
       setDresses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setPoints(userSnap.data()?.points || 0);
       setFetching(false);
-    });
-  }, [user]);
+    }).catch(() => setFetching(false));
+  }, [user, loading]);
 
-  if (fetching) return <div style={{ minHeight: "100vh", background: "#1A0E05", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>;
+  if (loading || fetching) return <div style={{ minHeight: "100vh", background: "#1A0E05", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>;
 
   return (
     <div style={{ background: "#1A0E05", minHeight: "100vh", paddingBottom: 90, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
-      {/* Header */}
       <div style={{ padding: "56px 20px 28px", textAlign: "center" }}>
         <div style={{ fontSize: 40, marginBottom: 8 }}>💎</div>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, fontWeight: 700, color: "#C9A96E", marginBottom: 4 }}>VIP Closet</div>
@@ -48,9 +49,7 @@ export default function VipPage() {
           <div style={{ background: "rgba(201,169,110,0.08)", border: "1px solid rgba(201,169,110,0.2)", borderRadius: 20, padding: "24px", textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 8 }}>محتوى حصري</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.7, marginBottom: 16 }}>
-              اجمعي 1,000 نقطة للوصول إلى فساتين VIP الحصرية
-            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.7, marginBottom: 16 }}>اجمعي 1,000 نقطة للوصول إلى فساتين VIP الحصرية</div>
             <Link href="/points">
               <button style={{ background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#1A0E05", border: "none", borderRadius: 50, padding: "12px 28px", fontFamily: "Tajawal, sans-serif", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>عرضي نقاطك</button>
             </Link>
