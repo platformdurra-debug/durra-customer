@@ -1,12 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function ChangePasswordPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [current, setCurrent] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -17,7 +17,14 @@ export default function ChangePasswordPage() {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
-  const inp: React.CSSProperties = { width: "100%", padding: "13px 16px", borderRadius: 14, border: "1.5px solid #E8DDD0", fontSize: 14, fontFamily: "Tajawal, sans-serif", background: "#fff", color: "#2C1A0A", outline: "none", textAlign: "right", direction: "rtl" };
+  useEffect(() => { if (!authLoading && !user) router.push("/auth"); }, [user, authLoading]);
+
+  const inp: React.CSSProperties = {
+    width: "100%", padding: "13px 16px", borderRadius: 14,
+    border: "1.5px solid #E8DDD0", fontSize: 14,
+    fontFamily: "Tajawal, sans-serif", background: "#fff",
+    color: "#2C1A0A", outline: "none", textAlign: "right", direction: "rtl",
+  };
 
   const handleSubmit = async () => {
     if (!user?.email || !current || !newPass || newPass !== confirm) { setError("تأكدي من تطابق كلمتي المرور"); return; }
@@ -29,10 +36,16 @@ export default function ChangePasswordPage() {
       await updatePassword(user as any, newPass);
       setDone(true);
       setTimeout(() => router.push("/profile"), 2000);
-    } catch (e: any) {
+    } catch {
       setError("كلمة المرور الحالية غير صحيحة");
     } finally { setLoading(false); }
   };
+
+  if (authLoading) return (
+    <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div>
+    </div>
+  );
 
   return (
     <div style={{ background: "#FAF7F2", minHeight: "100vh", fontFamily: "Tajawal, sans-serif", direction: "rtl", padding: "52px 20px 40px" }}>
@@ -64,7 +77,9 @@ export default function ChangePasswordPage() {
                 </button>
               </div>
               <input style={inp} type="password" placeholder="تأكيد كلمة المرور الجديدة" value={confirm} onChange={e => setConfirm(e.target.value)} />
-              {error && <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", fontSize: 13, color: "#DC2626", textAlign: "right" }}>⚠️ {error}</div>}
+              {error && (
+                <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", fontSize: 13, color: "#DC2626", textAlign: "right" }}>⚠️ {error}</div>
+              )}
               <button onClick={handleSubmit} disabled={loading || !current || !newPass || !confirm}
                 style={{ width: "100%", padding: "14px", borderRadius: 14, border: "none", cursor: "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !current || !newPass || !confirm ? "#EDE4D6" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !current || !newPass || !confirm ? "#9B7E60" : "#2C1A0A", opacity: loading ? 0.7 : 1, marginTop: 4 }}>
                 {loading ? "جاري التغيير..." : "تغيير كلمة المرور"}
