@@ -10,21 +10,23 @@ export default function NotificationsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] = useState(false);
 
   useEffect(() => { if (!loading && !user) router.push("/auth"); }, [user, loading]);
   useEffect(() => {
-    if (!user) return;
+    if (loading || !user?.uid) return;
+    setFetching(true);
     getDocs(query(collection(db, "notifications"), where("userId", "==", user.uid), orderBy("createdAt", "desc")))
-      .then(snap => { setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setFetching(false); });
-  }, [user]);
+      .then(snap => { setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setFetching(false); })
+      .catch(err => { console.error(err); setFetching(false); });
+  }, [user, loading]);
 
   const markRead = async (id: string) => {
     await updateDoc(doc(db, "notifications", id), { read: true });
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
-  if (fetching) return <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>;
+  if (loading || fetching) return <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>;
 
   return (
     <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 90, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
