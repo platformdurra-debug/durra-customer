@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
 
 const STATUS: Record<string, { label: string; color: string; bg: string }> = {
@@ -16,16 +17,30 @@ const STATUS: Record<string, { label: string; color: string; bg: string }> = {
 export default function OrderDetailPage() {
   const { id } = useParams();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    getDoc(doc(db, "bookings", id as string))
-      .then(snap => { if (snap.exists()) setOrder({ id: snap.id, ...snap.data() }); setLoading(false); });
-  }, [id]);
+  useEffect(() => { if (!authLoading && !user) router.push("/auth"); }, [user, authLoading]);
 
-  if (loading) return <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>;
-  if (!order) return <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: 14, color: "#9B7E60" }}>الطلب غير موجود</div></div>;
+  useEffect(() => {
+    if (authLoading || !user?.uid) return;
+    getDoc(doc(db, "bookings", id as string))
+      .then(snap => { if (snap.exists()) setOrder({ id: snap.id, ...snap.data() }); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [id, user, authLoading]);
+
+  if (authLoading || loading) return (
+    <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div>
+    </div>
+  );
+
+  if (!order) return (
+    <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ fontSize: 14, color: "#9B7E60" }}>الطلب غير موجود</div>
+    </div>
+  );
 
   const s = STATUS[order.status] || STATUS.pending;
   const startDate = order.startDate?.seconds ? new Date(order.startDate.seconds * 1000).toLocaleDateString("ar-BH") : "—";
@@ -47,11 +62,11 @@ export default function OrderDetailPage() {
       <div style={{ padding: "20px" }}>
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #E8DDD0", padding: "20px", marginBottom: 14, boxShadow: "0 2px 12px rgba(44,26,10,0.06)" }}>
           {[
-            { label: "رقم الطلب", value: `#${(id as string).slice(0, 8).toUpperCase()}` },
+            { label: "رقم الطلب",      value: `#${(id as string).slice(0, 8).toUpperCase()}` },
             { label: "تاريخ الاستلام", value: startDate },
             { label: "تاريخ الإرجاع", value: endDate },
             { label: "المبلغ الإجمالي", value: `${order.totalPrice} د.ب`, bold: true, gold: true },
-            { label: "حالة الدفع", value: order.paymentStatus === "held" ? "محتجز 🔒" : order.paymentStatus === "paid" ? "مدفوع ✓" : "معلّق" },
+            { label: "حالة الدفع",     value: order.paymentStatus === "held" ? "محتجز 🔒" : order.paymentStatus === "paid" ? "مدفوع ✓" : "معلّق" },
           ].map(item => (
             <div key={item.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #F2EDE4" }}>
               <span style={{ fontSize: item.bold ? 18 : 14, fontWeight: item.bold ? 800 : 400, color: item.gold ? "#A07840" : "#2C1A0A" }}>{item.value}</span>
