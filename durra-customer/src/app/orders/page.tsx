@@ -19,20 +19,23 @@ export default function OrdersPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [orders, setOrders] = useState<any[]>([]);
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] = useState(false);
   const [tab, setTab] = useState("all");
 
   useEffect(() => { if (!loading && !user) router.push("/auth"); }, [user, loading]);
+
   useEffect(() => {
-    if (!user) return;
+    if (loading || !user?.uid) return;
+    setFetching(true);
     getDocs(query(collection(db, "bookings"), where("customerId", "==", user.uid), orderBy("createdAt", "desc")))
-      .then(snap => { setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setFetching(false); });
-  }, [user]);
+      .then(snap => { setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setFetching(false); })
+      .catch(err => { console.error("Orders fetch error:", err); setFetching(false); });
+  }, [user, loading]);
 
   const tabs = [{ val: "all", label: "الكل" }, { val: "pending", label: "انتظار" }, { val: "confirmed", label: "مؤكدة" }, { val: "completed", label: "مكتملة" }];
   const filtered = tab === "all" ? orders : orders.filter(o => o.status === tab);
 
-  if (fetching) return <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>;
+  if (loading || fetching) return <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>;
 
   return (
     <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 90, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
