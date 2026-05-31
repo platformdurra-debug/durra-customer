@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { doc, getDoc, collection, getDocs, query, where, addDoc } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -61,6 +61,19 @@ export default function ServiceBookPage() {
         paymentStatus: "pending",
         createdAt: new Date(),
       });
+
+      // إشعار للمزود
+      if (provider?.ownerId) {
+        await addDoc(collection(db, "notifications"), {
+          userId: provider.ownerId,
+          type: "new_booking",
+          title: "🎉 طلب حجز جديد!",
+          body: (user.displayName || "زبونة") + " حجزت خدمة " + selectedProduct.name,
+          bookingId: ref.id,
+          read: false,
+          createdAt: serverTimestamp(),
+        });
+      }
 
       const session = await createSession({
         bookingId: ref.id,
