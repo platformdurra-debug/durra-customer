@@ -10,11 +10,17 @@ export default function AuthPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const { login, register, loading, error } = useAuthStore();
+  const { login, register, error } = useAuthStore();
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (isLogin) await login(email, password);
-    else await register(email, password, name, phone);
+    setSubmitting(true);
+    try {
+      if (isLogin) await login(email, password);
+      else await register(email, password, name, phone);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const inp: React.CSSProperties = {
@@ -87,7 +93,7 @@ export default function AuthPage() {
               </div>
             )}
 
-            <button onClick={handleSubmit} disabled={loading || !email || !password}
+            <button onClick={handleSubmit} disabled={submitting || !email || !password}
               style={{
                 width: "100%", padding: "15px", borderRadius: 14, border: "none", cursor: "pointer",
                 background: !email || !password ? "var(--cream3)" : "linear-gradient(135deg, #C9A96E, #E8D5A3, #C9A96E)",
@@ -96,9 +102,9 @@ export default function AuthPage() {
                 fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 16,
                 boxShadow: email && password ? "0 4px 20px rgba(201,169,110,0.3)" : "none",
                 transition: "all 0.3s", marginTop: 4,
-                opacity: loading ? 0.7 : 1,
+                opacity: submitting ? 0.7 : 1,
               }}>
-              {loading ? "جاري التحقق..." : isLogin ? "دخول" : "إنشاء حساب"}
+              {submitting ? "جاري التحقق..." : isLogin ? "دخول" : "إنشاء حساب"}
             </button>
 
             {isLogin && (
