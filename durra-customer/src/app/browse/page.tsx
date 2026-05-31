@@ -1,12 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where, orderBy, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy, doc, getDoc, addDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Dress } from "@/types";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import { useAuth } from "@/hooks/useAuth";
+import { useRouter } from "next/navigation";
 
 export default function BrowsePage() {
+  const { user } = useAuth();
+  const router = useRouter();
   const [dresses, setDresses] = useState<Dress[]>([]);
   const [filtered, setFiltered] = useState<Dress[]>([]);
   const [search, setSearch] = useState("");
@@ -24,7 +28,6 @@ export default function BrowsePage() {
       const data = dressSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Dress);
       setDresses(data);
       setFiltered(data);
-      // الأقسام من الأدمن فقط
       const cats = settingsSnap.exists() ? settingsSnap.data()?.categories || [] : [];
       setCategories(["الكل", ...cats]);
       setLoading(false);
@@ -33,17 +36,43 @@ export default function BrowsePage() {
   }, []);
 
   useEffect(() => {
+    if (!user) return;
+    getDocs(query(collection(db, "favorites"), where("userId", "==", user.uid)))
+      .then(snap => {
+        const ids = new Set(snap.docs.map(d => d.data().dressId as string));
+        setLiked(ids);
+      });
+  }, [user]);
+
+  useEffect(() => {
     let r = [...dresses];
     if (cat !== "الكل") r = r.filter(d => d.category === cat);
     if (search.trim()) r = r.filter(d => d.name?.includes(search) || d.color?.includes(search));
     setFiltered(r);
   }, [search, cat, dresses]);
 
-  const toggleLike = (id: string) => setLiked(prev => {
-    const s = new Set(prev);
-    s.has(id) ? s.delete(id) : s.add(id);
-    return s;
-  });
+  const toggleLike = async (e: React.MouseEvent, dress: Dress) => {
+    e.preventDefault();
+    if (!user) { router.push("/auth"); return; }
+    const s = new Set(liked);
+    if (s.has(dress.id)) {
+      s.delete(dress.id);
+      setLiked(new Set(s));
+      const snap = await getDocs(query(collection(db, "favorites"), where("userId", "==", user.uid), where("dressId", "==", dress.id)));
+      snap.forEach(d => deleteDoc(doc(db, "favorites", d.id)));
+    } else {
+      s.add(dress.id);
+      setLiked(new Set(s));
+      await addDoc(collection(db, "favorites"), {
+        userId: user.uid,
+        dressId: dress.id,
+        dressName: dress.name,
+        dressImage: dress.images?.[0] || "",
+        dressPrice: dress.price,
+        createdAt: new Date(),
+      });
+    }
+  };
 
   return (
     <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 90, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
@@ -52,7 +81,6 @@ export default function BrowsePage() {
       <div style={{ background: "#fff", padding: "52px 20px 0", borderBottom: "1px solid #E8DDD0", position: "sticky", top: 0, zIndex: 40 }}>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#2C1A0A", textAlign: "center", marginBottom: 14 }}>✦ الفساتين</div>
 
-        {/* Search */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FAF7F2", borderRadius: 50, border: "1.5px solid #E8DDD0", padding: "11px 16px", marginBottom: 14 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9B7E60" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input
@@ -63,7 +91,6 @@ export default function BrowsePage() {
           />
         </div>
 
-        {/* Categories — من Firebase فقط */}
         {categories.length > 1 && (
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 14, scrollbarWidth: "none" }}>
             {categories.map(c => (
@@ -80,12 +107,10 @@ export default function BrowsePage() {
         {categories.length <= 1 && <div style={{ height: 14 }} />}
       </div>
 
-      {/* Count */}
       <div style={{ padding: "12px 20px 0", textAlign: "left" }}>
         <span style={{ fontSize: 12, color: "#9B7E60" }}>{filtered.length} فستان</span>
       </div>
 
-      {/* Grid */}
       <div style={{ padding: "12px 14px 0", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         {loading ? (
           [1,2,3,4,5,6].map(i => (
@@ -109,7 +134,7 @@ export default function BrowsePage() {
                     </div>
                   )}
                   <button
-                    onClick={e => { e.preventDefault(); toggleLike(dress.id); }}
+                    onClick={e => toggleLike(e, dress)}
                     style={{ position: "absolute", top: 7, right: 7, width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill={liked.has(dress.id) ? "#C9A96E" : "none"} stroke={liked.has(dress.id) ? "#C9A96E" : "#9B7E60"} strokeWidth="2">
