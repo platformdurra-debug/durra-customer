@@ -14,6 +14,7 @@ const MENU = [
   { icon: "🔔", label: "الإشعارات",    href: "/notifications" },
   { icon: "🔑", label: "تغيير الباسورد", href: "/change-password" },
   { icon: "📞", label: "تواصل معنا",   href: "/contact" },
+  { icon: "✦",  label: "انضمي كمعرِضة", href: "/join" },
 ];
 
 export default function ProfilePage() {
