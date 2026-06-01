@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { Dress } from "@/types";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowRight, Upload, Sparkles, RefreshCw } from "lucide-react";
@@ -69,50 +70,17 @@ export default function TryOnPage() {
         urlToBase64(dress.images[0]),
       ]);
 
-      const apiKey = process.env.NEXT_PUBLIC_FASHN_API_KEY;
-
-      if (!apiKey || apiKey === "YOUR_FASHN_API_KEY") {
-        await new Promise(r => setTimeout(r, 3000));
-        clearInterval(timer);
-        setProgress(100);
-        setResultUrl(dress.images[0]);
-        setStage("result");
-        return;
-      }
-
-      const response = await fetch("https://api.fashn.ai/v1/run", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model_image: `data:image/jpeg;base64,${personB64}`,
-          garment_image: `data:image/jpeg;base64,${garmentB64}`,
-          category: "dresses",
-          mode: "quality",
-        }),
+      // استدعاء آمن عبر Cloud Function — المفتاح في السيرفر
+      const functions = getFunctions();
+      const fashnTryOn = httpsCallable(functions, "fashnTryOn");
+      const res: any = await fashnTryOn({
+        modelImage: `data:image/jpeg;base64,${personB64}`,
+        garmentImage: `data:image/jpeg;base64,${garmentB64}`,
+        category: "dresses",
       });
 
-      if (!response.ok) throw new Error("فشل الاتصال بخدمة التجريب");
-
-      const data = await response.json();
-      const predictionId = data.id;
-
-      let result = null;
-      for (let i = 0; i < 30; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        const poll = await fetch(`https://api.fashn.ai/v1/status/${predictionId}`, {
-          headers: { "Authorization": `Bearer ${apiKey}` },
-        });
-        const pollData = await poll.json();
-
-        if (pollData.status === "completed") { result = pollData.output?.[0]; break; }
-        if (pollData.status === "failed") throw new Error("فشلت عملية التجريب");
-        setProgress(p => Math.min(p + 3, 92));
-      }
-
-      if (!result) throw new Error("انتهت مهلة الانتظار");
+      const result = res.data?.output;
+      if (!result) throw new Error("فشلت عملية التجريب");
 
       clearInterval(timer);
       setProgress(100);
@@ -283,9 +251,9 @@ export default function TryOnPage() {
                 </div>
               </div>
             )}
-            {!process.env.NEXT_PUBLIC_FASHN_API_KEY && (
+            {false && (
               <div className="rounded-xl p-3 mb-4" style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)" }}>
-                <div style={{ fontSize: 12, color: "#F59E0B" }}>⚠️ وضع التطوير — أضيفي NEXT_PUBLIC_FASHN_API_KEY للنتائج الحقيقية</div>
+                <div style={{ fontSize: 12, color: "#F59E0B" }}>⚠️ وضع التطوير — خدمة التجريب قيد الإعداد</div>
               </div>
             )}
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 12 }}>يعجبك الفستان؟ 💎</div>
@@ -308,7 +276,7 @@ export default function TryOnPage() {
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>{error}</div>
             <div className="rounded-xl p-3 mb-6" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
               <div style={{ fontSize: 12, color: "#FCA5A5", lineHeight: 1.7 }}>
-                تأكدي من إضافة NEXT_PUBLIC_FASHN_API_KEY في ملف .env.local<br />
+                حدثت مشكلة في خدمة التجريب، حاولي مرة أخرى<br />
                 أو تحققي من اتصالك بالإنترنت
               </div>
             </div>
