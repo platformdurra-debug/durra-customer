@@ -3,6 +3,7 @@ import { useState } from "react";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 
 const TYPES = [
   { val: "seller",   label: "معرِضة فساتين",    icon: "👗", desc: "أعرض فساتيني للتأجير" },
@@ -16,6 +17,7 @@ const SERVICE_TYPES = [
 
 export default function JoinPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [type, setType] = useState<"seller" | "provider" | "">("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -41,6 +43,7 @@ export default function JoinPage() {
         serviceType: type === "provider" ? serviceType : "",
         description,
         instagram,
+        applicantUid: user?.uid || null,
         status: "pending",
         createdAt: serverTimestamp(),
       });
