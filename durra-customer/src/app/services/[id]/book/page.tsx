@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +17,7 @@ export default function ServiceBookPage() {
   const [provider, setProvider] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [notes, setNotes] = useState("");
@@ -39,45 +41,36 @@ export default function ServiceBookPage() {
     }).catch(() => setFetching(false));
   }, [id, user, loading]);
 
+  // للعرض فقط
+  const addonsTotal = selectedProduct?.addons
+    ? selectedProduct.addons.filter((a: any) => selectedAddons.includes(a.name)).reduce((s: number, a: any) => s + a.price, 0)
+    : 0;
+  const displayTotal = (selectedProduct?.price || 0) + addonsTotal;
+
+  const toggleAddon = (name: string) => {
+    setSelectedAddons(prev => prev.includes(name) ? prev.filter(a => a !== name) : [...prev, name]);
+  };
+
   const handleBook = async () => {
     if (!user) { router.push("/auth"); return; }
     if (!date || !time || !selectedProduct) { alert("أكملي جميع الحقول"); return; }
     setLoading2(true);
     try {
-      const ref = await addDoc(collection(db, "serviceBookings"), {
-        customerId: user.uid,
-        customerName: user.displayName || "",
-        customerEmail: user.email || "",
-        customerPhone: user.phone || "",
+      const functions = getFunctions();
+      const createServiceBooking = httpsCallable(functions, "createServiceBookingSecure");
+
+      const result: any = await createServiceBooking({
         providerId: id,
-        providerName: provider?.name || "",
         productId: selectedProduct.id,
-        productName: selectedProduct.name,
         date, time, notes,
-        totalPrice: selectedProduct.price,
-        providerAmount: Math.round(selectedProduct.price * 0.7),
-        commission: Math.round(selectedProduct.price * 0.3),
-        status: "pending",
-        paymentStatus: "pending",
-        createdAt: new Date(),
+        addons: selectedAddons,
       });
 
-      // إشعار للمزود
-      if (provider?.ownerId) {
-        await addDoc(collection(db, "notifications"), {
-          userId: provider.ownerId,
-          type: "new_booking",
-          title: "🎉 طلب حجز جديد!",
-          body: (user.displayName || "زبونة") + " حجزت خدمة " + selectedProduct.name,
-          bookingId: ref.id,
-          read: false,
-          createdAt: serverTimestamp(),
-        });
-      }
+      const { bookingId, totalPrice: serverTotal } = result.data;
 
       const session = await createSession({
-        bookingId: ref.id,
-        amount: selectedProduct.price,
+        bookingId,
+        amount: serverTotal,
         customerName: user.displayName,
         customerEmail: user.email,
         customerPhone: user.phone,
@@ -88,8 +81,10 @@ export default function ServiceBookPage() {
       } else {
         router.push("/orders");
       }
-    } catch (e) {
-      alert("حدث خطأ، حاولي مرة ثانية");
+    } catch (e: any) {
+      const msg = e?.message || "";
+      if (msg.includes("غير متاح")) alert("هذا المزوّد غير متاح حالياً");
+      else alert("حدث خطأ، حاولي مرة ثانية");
     } finally {
       setLoading2(false);
     }
@@ -140,7 +135,7 @@ export default function ServiceBookPage() {
             <div style={{ fontSize: 13, color: "#6B5744", fontWeight: 600, marginBottom: 10, textAlign: "right" }}>اختاري الخدمة</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {products.map(p => (
-                <div key={p.id} onClick={() => setSelectedProduct(p)}
+                <div key={p.id} onClick={() => { setSelectedProduct(p); setSelectedAddons([]); }}
                   style={{ background: selectedProduct?.id === p.id ? "rgba(201,169,110,0.08)" : "#fff", borderRadius: 16, border: `1.5px solid ${selectedProduct?.id === p.id ? "#C9A96E" : "#EDE8DF"}`, padding: "14px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.2s" }}>
                   <div style={{ textAlign: "left" }}>
                     <div style={{ fontSize: 16, fontWeight: 800, color: "#A07840" }}>{p.price} <span style={{ fontSize: 11 }}>د.ب</span></div>
@@ -149,6 +144,27 @@ export default function ServiceBookPage() {
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1810" }}>{p.name}</div>
                     {p.description && <div style={{ fontSize: 11, color: "#9B7E60" }}>{p.description}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* الإضافات */}
+        {selectedProduct?.addons && selectedProduct.addons.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: "#6B5744", fontWeight: 600, marginBottom: 10, textAlign: "right" }}>إضافات اختيارية</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {selectedProduct.addons.map((addon: any) => (
+                <div key={addon.name} onClick={() => toggleAddon(addon.name)}
+                  style={{ background: selectedAddons.includes(addon.name) ? "rgba(201,169,110,0.08)" : "#fff", borderRadius: 14, border: `1.5px solid ${selectedAddons.includes(addon.name) ? "#C9A96E" : "#EDE8DF"}`, padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#A07840" }}>+{addon.price} د.ب</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 13, color: "#2C1810" }}>{addon.name}</span>
+                    <div style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${selectedAddons.includes(addon.name) ? "#C9A96E" : "#EDE8DF"}`, background: selectedAddons.includes(addon.name) ? "#C9A96E" : "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {selectedAddons.includes(addon.name) && <span style={{ color: "#fff", fontSize: 12 }}>✓</span>}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -172,6 +188,12 @@ export default function ServiceBookPage() {
               <span style={{ fontSize: 13, color: "#9B7E60" }}>{selectedProduct.price} د.ب</span>
               <span style={{ fontSize: 13, color: "#2C1810" }}>{selectedProduct.name}</span>
             </div>
+            {selectedProduct.addons?.filter((a: any) => selectedAddons.includes(a.name)).map((a: any) => (
+              <div key={a.name} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 13, color: "#9B7E60" }}>+{a.price} د.ب</span>
+                <span style={{ fontSize: 13, color: "#2C1810" }}>{a.name}</span>
+              </div>
+            ))}
             {date && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
               <span style={{ fontSize: 13, color: "#9B7E60" }}>{new Date(date).toLocaleDateString("ar-BH")}</span>
               <span style={{ fontSize: 13, color: "#2C1810" }}>التاريخ</span>
@@ -181,7 +203,7 @@ export default function ServiceBookPage() {
               <span style={{ fontSize: 13, color: "#2C1810" }}>الوقت</span>
             </div>}
             <div style={{ borderTop: "1px solid #EDE8DF", paddingTop: 10, marginTop: 10, display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 18, fontWeight: 800, color: "#C9A96E" }}>{selectedProduct.price} د.ب</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: "#C9A96E" }}>{displayTotal} د.ب</span>
               <span style={{ fontSize: 15, fontWeight: 800, color: "#2C1810" }}>الإجمالي</span>
             </div>
           </div>
@@ -196,7 +218,7 @@ export default function ServiceBookPage() {
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 28px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
         <button onClick={handleBook} disabled={loading2 || !date || !time || !selectedProduct}
           style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading2 || !date || !time ? "not-allowed" : "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !date || !time ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !date || !time ? "#9B7E60" : "#2C1810", opacity: loading2 ? 0.7 : 1, transition: "all 0.2s", boxShadow: date && time ? "0 4px 16px rgba(201,169,110,0.3)" : "none" }}>
-          {loading2 ? "جاري التوجيه للدفع..." : `ادفعي الآن${selectedProduct ? ` — ${selectedProduct.price} د.ب` : ""}`}
+          {loading2 ? "جاري التوجيه للدفع..." : `ادفعي الآن${selectedProduct ? ` — ${displayTotal} د.ب` : ""}`}
         </button>
       </div>
     </div>
