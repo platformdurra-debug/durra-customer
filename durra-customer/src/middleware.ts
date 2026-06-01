@@ -14,13 +14,16 @@ const ALLOWED_ROLES = ["customer"];
 
 const PUBLIC_PATHS = [
   "/",
-  "/",
   "/auth",
   "/browse",
   "/search",
   "/services",
   "/dress",
-  "/register",
+  "/join",
+  "/terms",
+  "/privacy",
+  "/cancellation",
+  "/contact",
 ];
 
 export function middleware(request: NextRequest) {
