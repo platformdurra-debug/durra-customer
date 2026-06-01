@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,9 +42,20 @@ export default function ServiceOrderDetailPage() {
   const cancelOrder = async () => {
     if (!confirm("هل تريدين إلغاء هذا الطلب؟")) return;
     setCancelling(true);
-    await updateDoc(doc(db, "serviceBookings", id), { status: "cancelled", cancelledAt: new Date() });
-    setOrder((prev: any) => ({ ...prev, status: "cancelled" }));
-    setCancelling(false);
+    try {
+      const functions = getFunctions();
+      const cancelBooking = httpsCallable(functions, "cancelBookingSecure");
+      const result: any = await cancelBooking({ bookingId: id, type: "service" });
+      const { refundPct, refundAmount } = result.data;
+      setOrder((prev: any) => ({ ...prev, status: "cancelled" }));
+      if (refundPct === 100) alert("تم إلغاء الطلب — سيتم استرداد كامل المبلغ");
+      else if (refundPct > 0) alert("تم إلغاء الطلب — سيتم استرداد " + refundAmount + " د.ب (" + refundPct + "%) حسب سياسة الإلغاء");
+      else alert("تم إلغاء الطلب — لا يوجد استرداد حسب سياسة الإلغاء");
+    } catch (e) {
+      alert("حدث خطأ، حاولي مرة أخرى");
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const submitComplaint = async () => {
