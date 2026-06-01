@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "@/lib/firebase";
 import { Dress } from "@/types";
 import { useParams, useRouter } from "next/navigation";
-import { useBookingStore } from "@/store/bookingStore";
 import { useAuth } from "@/hooks/useAuth";
 import { usePayTabs } from "@/hooks/usePayTabs";
 import { ArrowRight } from "lucide-react";
@@ -13,13 +13,11 @@ export default function BookPage() {
   const { id } = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const { createBooking } = useBookingStore();
   const { createSession } = usePayTabs();
   const [dress, setDress] = useState<Dress | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [size, setSize] = useState("");
-  const [delivery, setDelivery] = useState(true); // إجباري
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [deliveryPrice, setDeliveryPrice] = useState(0);
@@ -44,37 +42,31 @@ export default function BookPage() {
     return Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000));
   };
 
-  const rentalPrice  = dress ? dress.price * calcDays() : 0;
-  const totalPrice   = rentalPrice + deliveryPrice + depositAmount;
-  const commission   = Math.round(rentalPrice * 0.3);
-  const sellerAmount = rentalPrice - commission;
+  // للعرض فقط — الحساب الفعلي يصير في السيرفر
+  const rentalPrice = dress ? dress.price * calcDays() : 0;
+  const totalPrice  = rentalPrice + deliveryPrice + depositAmount;
 
   const handleBook = async () => {
     if (!user) { router.push("/auth"); return; }
     if (!startDate || !endDate || !size) { alert("أكملي جميع الحقول"); return; }
     setLoading(true);
     try {
-      const bookingId = await createBooking({
-        customerId: user.uid,
+      const functions = getFunctions();
+      const createBooking = httpsCallable(functions, "createBookingSecure");
+
+      // السيرفر يحسب السعر ويتحقق من التوفّر وينشئ الحجز
+      const result: any = await createBooking({
         dressId: id as string,
-        sellerId: dress!.sellerId,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate,
+        endDate,
         size,
-        rentalPrice,
-        deliveryPrice,
-        depositAmount,
-        totalPrice,
-        commission,
-        sellerAmount,
-        status: "pending",
-        paymentStatus: "pending",
-        createdAt: new Date(),
       });
+
+      const { bookingId, totalPrice: serverTotal } = result.data;
 
       const session = await createSession({
         bookingId,
-        amount: totalPrice,
+        amount: serverTotal,
         customerName: user.displayName,
         customerEmail: user.email,
         customerPhone: user.phone,
@@ -85,8 +77,12 @@ export default function BookPage() {
       } else {
         router.push("/orders");
       }
-    } catch (e) {
-      alert("حدث خطأ، حاولي مرة ثانية");
+    } catch (e: any) {
+      // رسائل الأخطاء من السيرفر
+      const msg = e?.message || "";
+      if (msg.includes("محجوز")) alert("عذراً، الفستان محجوز في هذه الفترة");
+      else if (msg.includes("غير متاح")) alert("هذا الفستان غير متاح للحجز حالياً");
+      else alert("حدث خطأ، حاولي مرة ثانية");
     } finally {
       setLoading(false);
     }
@@ -142,7 +138,7 @@ export default function BookPage() {
           {dress?.size?.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
 
-        {/* Delivery — إجباري */}
+        {/* Delivery */}
         <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #EDE8DF", padding: "14px 16px", marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -204,7 +200,6 @@ export default function BookPage() {
           </div>
         )}
 
-        {/* Security note */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, background: "#F0FDF4", border: "1px solid #BBF7D0", marginBottom: 8 }}>
           <span>🔒</span>
           <span style={{ fontSize: 12, color: "#065F46" }}>دفع آمن عبر PayTabs — المبلغ محتجز حتى استلام الفستان</span>
