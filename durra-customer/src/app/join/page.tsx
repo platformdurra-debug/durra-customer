@@ -11,8 +11,12 @@ const TYPES = [
 ];
 
 const SERVICE_TYPES = [
-  "مكياج عروس", "صالون تجميل", "تصوير عرايس",
-  "صالة أفراح", "ورد وديكور", "كيك وكاتيرينج",
+  { value: "makeup",       label: "مكياج عروس" },
+  { value: "salon",        label: "صالون تجميل" },
+  { value: "photographer", label: "تصوير عرايس" },
+  { value: "hall",         label: "صالة أفراح" },
+  { value: "flowers",      label: "ورد وديكور" },
+  { value: "catering",     label: "كيك وكاتيرينج" },
 ];
 
 export default function JoinPage() {
@@ -124,9 +128,9 @@ export default function JoinPage() {
                 <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 8, textAlign: "right" }}>نوع الخدمة *</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {SERVICE_TYPES.map(s => (
-                    <button key={s} onClick={() => setServiceType(s)}
-                      style={{ padding: "8px 16px", borderRadius: 50, border: `1px solid ${serviceType === s ? "#C9A96E" : "#E8DDD0"}`, cursor: "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 600, fontSize: 12, background: serviceType === s ? "rgba(201,169,110,0.1)" : "#fff", color: serviceType === s ? "#A07840" : "#9B7E60", transition: "all 0.2s" }}>
-                      {s}
+                    <button key={s.value} onClick={() => setServiceType(s.value)}
+                      style={{ padding: "8px 16px", borderRadius: 50, border: `1px solid ${serviceType === s.value ? "#C9A96E" : "#E8DDD0"}`, cursor: "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 600, fontSize: 12, background: serviceType === s.value ? "rgba(201,169,110,0.1)" : "#fff", color: serviceType === s.value ? "#A07840" : "#9B7E60", transition: "all 0.2s" }}>
+                      {s.label}
                     </button>
                   ))}
                 </div>
