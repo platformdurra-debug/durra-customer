@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { addDoc, collection, serverTimestamp, doc, updateDoc, increment } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { useAuth } from "@/hooks/useAuth";
 import { useParams, useRouter } from "next/navigation";
 
@@ -20,13 +19,19 @@ export default function ReviewPage() {
   const handleSubmit = async () => {
     if (!user || rating === 0 || !comment.trim()) return;
     setLoading2(true);
-    await addDoc(collection(db, "reviews"), {
-      userId: user.uid, targetId: id, type: "dress",
-      rating, comment, createdAt: serverTimestamp(),
-    });
-    await updateDoc(doc(db, "users", user.uid), { points: increment(10) });
-    setDone(true);
-    setTimeout(() => router.push("/orders"), 2000);
+    try {
+      const functions = getFunctions();
+      const submitReview = httpsCallable(functions, "submitReviewSecure");
+      await submitReview({ targetId: id, type: "dress", rating, comment });
+      setDone(true);
+      setTimeout(() => router.push("/orders"), 2000);
+    } catch (e: any) {
+      const msg = e?.message || "";
+      if (msg.includes("بعد إتمام")) alert("يمكنك التقييم فقط بعد إتمام الحجز");
+      else if (msg.includes("مسبقاً")) alert("لقد قيّمتِ هذا الفستان مسبقاً");
+      else alert("حدث خطأ، حاولي مرة أخرى");
+      setLoading2(false);
+    }
   };
 
   return (
