@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import CartFab from "@/components/CartFab";
 
 export const metadata: Metadata = {
   title: { default: "درّة — لتأجير فساتين الزفاف", template: "%s | درّة" },
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {children}
+        <CartFab />
         <script dangerouslySetInnerHTML={{
           __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js')})}`
         }} />
