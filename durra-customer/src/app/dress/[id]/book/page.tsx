@@ -71,7 +71,7 @@ export default function BookPage() {
 
       const session = await startPayment({
         bookingId, amount: serverTotal,
-        customerName: user.displayName, customerEmail: user.email, customerPhone: user.phone,
+        customerName: user.displayName || "عميلة", customerEmail: user.email || "", customerPhone: user.phone || "",
         method: payMethod, type: "dress",
       });
 
