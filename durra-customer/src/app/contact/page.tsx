@@ -12,7 +12,7 @@ export default function ContactPage() {
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [contactInfo, setContactInfo] = useState({ whatsapp: "97366000000", instagram: "durrahonline" });
+  const [contactInfo, setContactInfo] = useState<any>({ whatsapp: "", instagram: "", email: "", phone: "" });
 
   useEffect(() => {
     getDoc(doc(db, "settings", "contact"))
@@ -74,6 +74,22 @@ export default function ContactPage() {
               <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>إنستقرام</div>
             </div>
           </a>
+          {contactInfo.phone && (
+            <a href={`tel:${contactInfo.phone}`} style={{ textDecoration: "none" }}>
+              <div style={{ background: "#C9A96E", borderRadius: 18, padding: "16px", textAlign: "center" }}>
+                <div style={{ fontSize: 28, marginBottom: 4 }}>📞</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>اتصال</div>
+              </div>
+            </a>
+          )}
+          {contactInfo.email && (
+            <a href={`mailto:${contactInfo.email}`} style={{ textDecoration: "none" }}>
+              <div style={{ background: "#3D2810", borderRadius: 18, padding: "16px", textAlign: "center" }}>
+                <div style={{ fontSize: 28, marginBottom: 4 }}>✉️</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>بريد</div>
+              </div>
+            </a>
+          )}
         </div>
 
         {/* Form */}
