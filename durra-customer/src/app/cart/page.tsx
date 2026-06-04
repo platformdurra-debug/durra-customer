@@ -49,9 +49,9 @@ export default function CartPage() {
       const session = await createSession({
         bookingId: cartGroupId,
         amount: serverTotal,
-        customerName: user.displayName,
-        customerEmail: user.email,
-        customerPhone: user.phone,
+        customerName: user.displayName || "عميلة",
+        customerEmail: user.email || "",
+        customerPhone: user.phone || "",
       });
 
       if (session.redirect_url) {
