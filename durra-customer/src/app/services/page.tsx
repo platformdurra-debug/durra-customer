@@ -5,15 +5,6 @@ import { db } from "@/lib/firebase";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 
-// فئات افتراضية لو ما في فئات في Firebase بعد
-const FALLBACK = [
-  { value: "makeup",       title: "مكياج العروس",      desc: "لإطلالة تخطف الأنظار",      icon: "💄" },
-  { value: "salon",        title: "صالونات التجميل",   desc: "جمالك في أفضل حلة",         icon: "💇" },
-  { value: "photographer", title: "تصوير العرايس",     desc: "لحظاتك تستحق أن تُخلّد",    icon: "📸" },
-  { value: "hall",         title: "صالات الأفراح",     desc: "ليلة لا تُنسى",             icon: "🏛" },
-  { value: "flowers",      title: "الورد والديكور",    desc: "أجواء ساحرة بلمسة طبيعية", icon: "🌸" },
-  { value: "catering",     title: "الكيك والكاتيرينج", desc: "حلاوة تكمّل يومك",          icon: "🎂" },
-];
 
 export default function ServicesPage() {
   const [categories, setCategories] = useState<any[]>([]);
@@ -22,11 +13,10 @@ export default function ServicesPage() {
   useEffect(() => {
     getDocs(query(collection(db, "serviceCategories"), where("active", "==", true), orderBy("order", "asc")))
       .then(snap => {
-        const cats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setCategories(cats.length > 0 ? cats : FALLBACK);
+        setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         setLoading(false);
       })
-      .catch(() => { setCategories(FALLBACK); setLoading(false); });
+      .catch(() => setLoading(false));
   }, []);
 
   return (
@@ -39,6 +29,12 @@ export default function ServicesPage() {
       <div style={{ padding: "20px" }}>
         {loading ? (
           <div style={{ textAlign: "center", padding: 40 }}><div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div></div>
+        ) : categories.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "#9B7E60" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🌸</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#2C1A0A", marginBottom: 6 }}>لا توجد خدمات متاحة حالياً</div>
+            <div style={{ fontSize: 13 }}>سيتم إضافة الخدمات قريباً</div>
+          </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             {categories.map(s => (
