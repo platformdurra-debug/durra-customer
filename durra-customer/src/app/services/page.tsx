@@ -43,10 +43,18 @@ export default function ServicesPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             {categories.map(s => (
               <Link href={`/services/${s.value}`} key={s.value} style={{ textDecoration: "none" }}>
-                <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #E8DDD0", padding: "24px 16px", textAlign: "center", boxShadow: "0 2px 12px rgba(44,26,10,0.05)", transition: "all 0.2s", height: "100%" }}>
-                  <div style={{ fontSize: 44, marginBottom: 12 }}>{s.icon}</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: "#2C1A0A", marginBottom: 6 }}>{s.title}</div>
-                  <div style={{ fontSize: 11, color: "#9B7E60", lineHeight: 1.6 }}>{s.desc}</div>
+                <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #E8DDD0", overflow: "hidden", boxShadow: "0 2px 12px rgba(44,26,10,0.05)", transition: "all 0.2s", height: "100%" }}>
+                  <div style={{ width: "100%", height: 120, background: "#F2EDE4", overflow: "hidden" }}>
+                    {s.image ? (
+                      <img src={s.image} alt={s.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>{s.icon || "🌸"}</div>
+                    )}
+                  </div>
+                  <div style={{ padding: "14px 16px", textAlign: "center" }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#2C1A0A", marginBottom: 6 }}>{s.title}</div>
+                    <div style={{ fontSize: 11, color: "#9B7E60", lineHeight: 1.6 }}>{s.desc}</div>
+                  </div>
                 </div>
               </Link>
             ))}
