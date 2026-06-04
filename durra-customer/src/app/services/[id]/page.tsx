@@ -12,11 +12,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string 
   closed: { label: "مغلق",       color: "#991B1B", dot: "#EF4444" },
 };
 
-const FALLBACK_LABELS: Record<string, string> = {
-  makeup: "مكياج العروس", salon: "الصالونات", hall: "صالات الأفراح",
-  photographer: "المصورون", flowers: "الورد والديكور", catering: "الكيك والكاتيرينج",
-};
-
 export default function ServiceSlugPage() {
   const params = useParams();
   const slug = params?.id as string;
@@ -31,13 +26,12 @@ export default function ServiceSlugPage() {
   useEffect(() => {
     if (!slug) return;
     const resolve = async () => {
-      // 1) هل الـ slug فئة خدمات؟ (نبحث في serviceCategories بالـ value، أو في الـ fallback)
+      // 1) هل الـ slug فئة خدمات في Firebase؟
       const catSnap = await getDocs(query(collection(db, "serviceCategories"), where("value", "==", slug)));
-      const isFallbackCat = Object.keys(FALLBACK_LABELS).includes(slug);
 
-      if (!catSnap.empty || isFallbackCat) {
+      if (!catSnap.empty) {
         // وضع الفئة — اعرض المزودين
-        setCategoryTitle(!catSnap.empty ? catSnap.docs[0].data().title : FALLBACK_LABELS[slug]);
+        setCategoryTitle(catSnap.docs[0].data().title);
         const provSnap = await getDocs(query(
           collection(db, "providers"),
           where("approved", "==", true),
