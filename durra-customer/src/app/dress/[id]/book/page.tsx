@@ -6,14 +6,16 @@ import { db } from "@/lib/firebase";
 import { Dress } from "@/types";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { usePayTabs } from "@/hooks/usePayTabs";
+import PaymentMethods, { PayMethod } from "@/components/PaymentMethods";
+import { useTapPayment } from "@/hooks/useTapPayment";
 import { ArrowRight } from "lucide-react";
 
 export default function BookPage() {
   const { id } = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const { createSession } = usePayTabs();
+  const { startPayment } = useTapPayment();
+  const [payMethod, setPayMethod] = useState<PayMethod>("card");
   const [dress, setDress] = useState<Dress | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -60,20 +62,23 @@ export default function BookPage() {
         startDate,
         endDate,
         size,
+        paymentMethod: payMethod === "cod" ? "cod" : "online",
       });
 
-      const { bookingId, totalPrice: serverTotal } = result.data;
+      const { bookingId, totalPrice: serverTotal, isCOD } = result.data;
 
-      const session = await createSession({
-        bookingId,
-        amount: serverTotal,
-        customerName: user.displayName,
-        customerEmail: user.email,
-        customerPhone: user.phone,
+      if (isCOD) { router.push("/orders"); return; }
+
+      const session = await startPayment({
+        bookingId, amount: serverTotal,
+        customerName: user.displayName, customerEmail: user.email, customerPhone: user.phone,
+        method: payMethod, type: "dress",
       });
 
       if (session.redirect_url) {
         window.location.href = session.redirect_url;
+      } else if (session.status === "dev_mode") {
+        alert("بوابة الدفع غير مفعّلة بعد. استخدمي الدفع عند الاستلام مؤقتاً.");
       } else {
         router.push("/orders");
       }
@@ -200,9 +205,9 @@ export default function BookPage() {
           </div>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, background: "#F0FDF4", border: "1px solid #BBF7D0", marginBottom: 8 }}>
-          <span>🔒</span>
-          <span style={{ fontSize: 12, color: "#065F46" }}>دفع آمن عبر PayTabs — المبلغ محتجز حتى استلام الفستان</span>
+        {/* اختيار طريقة الدفع */}
+        <div style={{ marginBottom: 12 }}>
+          <PaymentMethods amount={totalPrice} selected={payMethod} onSelect={setPayMethod} allowCOD={true} />
         </div>
       </div>
 
@@ -210,7 +215,7 @@ export default function BookPage() {
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 28px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
         <button onClick={handleBook} disabled={loading || !startDate || !endDate || !size}
           style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading || !startDate || !endDate || !size ? "not-allowed" : "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !startDate || !endDate || !size ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !startDate || !endDate || !size ? "#9B7E60" : "#2C1810", opacity: loading ? 0.7 : 1, transition: "all 0.2s", boxShadow: startDate && endDate && size ? "0 4px 16px rgba(201,169,110,0.3)" : "none" }}>
-          {loading ? "جاري التوجيه للدفع..." : `ادفعي الآن${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}`}
+          {loading ? "جاري المعالجة..." : payMethod === "cod" ? `تأكيد الحجز${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}` : `ادفعي${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}`}
         </button>
       </div>
     </div>
