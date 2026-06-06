@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { doc, getDoc, collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
@@ -20,10 +20,10 @@ export default function PointsPage() {
     setFetching(true);
     Promise.all([
       getDoc(doc(db, "users", user.uid)),
-      getDocs(query(collection(db, "points"), where("userId", "==", user.uid), orderBy("createdAt", "desc"))),
+      getDocs(query(collection(db, "points"), where("userId", "==", user.uid))),
     ]).then(([userSnap, pointsSnap]) => {
       if (userSnap.exists()) { setPoints(userSnap.data().points || 0); setLevel(userSnap.data().level || "عادي"); }
-      setHistory(pointsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setHistory(pointsSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
       setFetching(false);
     }).catch(err => { console.error(err); setFetching(false); });
   }, [user, loading]);
