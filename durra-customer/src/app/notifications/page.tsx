@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where, orderBy, updateDoc, doc } from "firebase/firestore";
+import { collection, getDocs, query, where, updateDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
@@ -16,8 +16,8 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (loading || !user?.uid) return;
     setFetching(true);
-    getDocs(query(collection(db, "notifications"), where("userId", "==", user.uid), orderBy("createdAt", "desc")))
-      .then(snap => { setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setFetching(false); })
+    getDocs(query(collection(db, "notifications"), where("userId", "==", user.uid)))
+      .then(snap => { setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))); setFetching(false); })
       .catch(err => { console.error(err); setFetching(false); });
   }, [user, loading]);
 
