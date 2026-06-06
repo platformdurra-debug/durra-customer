@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where, orderBy, doc, getDoc, addDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, doc, getDoc, addDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Dress } from "@/types";
 import Link from "next/link";
@@ -22,10 +22,13 @@ export default function BrowsePage() {
   useEffect(() => {
     const fetchAll = async () => {
       const [dressSnap, settingsSnap] = await Promise.all([
-        getDocs(query(collection(db, "dresses"), where("approved", "==", true), where("available", "==", true), orderBy("createdAt", "desc"))),
+        getDocs(query(collection(db, "dresses"), where("approved", "==", true))),
         getDoc(doc(db, "settings", "filters")),
       ]);
-      const data = dressSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Dress);
+      const data = dressSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as Dress)
+        .filter((dr: any) => dr.available !== false)
+        .sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setDresses(data);
       setFiltered(data);
       const cats = settingsSnap.exists() ? settingsSnap.data()?.categories || [] : [];
