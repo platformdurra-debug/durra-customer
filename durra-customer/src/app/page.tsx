@@ -27,10 +27,14 @@ export default function HomePage() {
 
   useEffect(() => {
     Promise.all([
-      getDocs(query(collection(db, "dresses"), where("approved", "==", true), where("available", "==", true), orderBy("createdAt", "desc"), limit(6))),
+      getDocs(query(collection(db, "dresses"), where("approved", "==", true), limit(20))),
       getDoc(doc(db, "settings", "serviceImages")),
     ]).then(([dressSnap, imagesSnap]) => {
-      setDresses(dressSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Dress));
+      setDresses(dressSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as Dress)
+        .filter((dr: any) => dr.available !== false)
+        .sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+        .slice(0, 6));
       if (imagesSnap.exists()) setServiceImages(imagesSnap.data() || {});
       setLoading(false);
     }).catch(() => setLoading(false));
