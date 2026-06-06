@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
@@ -11,12 +11,16 @@ export default function ServicesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getDocs(query(collection(db, "serviceCategories"), where("active", "==", true), orderBy("order", "asc")))
+    getDocs(collection(db, "serviceCategories"))
       .then(snap => {
-        setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const cats = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as any))
+          .filter(c => c.active !== false)              // الفعّالة فقط
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)); // ترتيب في الكود
+        setCategories(cats);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((e) => { console.error(e); setLoading(false); });
   }, []);
 
   return (
