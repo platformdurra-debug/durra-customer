@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
@@ -29,8 +29,8 @@ export default function OrdersPage() {
     if (loading || !user?.uid) return;
     setFetching(true);
     Promise.all([
-      getDocs(query(collection(db, "bookings"), where("customerId", "==", user.uid), orderBy("createdAt", "desc"))),
-      getDocs(query(collection(db, "serviceBookings"), where("customerId", "==", user.uid), orderBy("createdAt", "desc"))),
+      getDocs(query(collection(db, "bookings"), where("customerId", "==", user.uid))),
+      getDocs(query(collection(db, "serviceBookings"), where("customerId", "==", user.uid))),
     ]).then(([dressSnap, serviceSnap]) => {
       const dressOrders = dressSnap.docs.map(d => ({ id: d.id, ...d.data(), orderType: "dress" }));
       const serviceOrders = serviceSnap.docs.map(d => ({ id: d.id, ...d.data(), orderType: "service" }));
