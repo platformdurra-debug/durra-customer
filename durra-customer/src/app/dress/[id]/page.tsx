@@ -4,6 +4,7 @@ import { doc, getDoc, collection, getDocs, query, where, addDoc, deleteDoc } fro
 import { db } from "@/lib/firebase";
 import { Dress } from "@/types";
 import { useParams, useRouter } from "next/navigation";
+import { useCartStore } from "@/store/cartStore";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 export default function DressDetailPage() {
   const { id } = useParams();
   const router = useRouter();
+  const { addItem, hasItem } = useCartStore();
   const { user } = useAuth();
   const [dress, setDress] = useState<Dress | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -101,7 +103,15 @@ export default function DressDetailPage() {
 
       <div style={{ padding: "20px 20px 0" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-          <div style={{ fontSize: 24, fontWeight: 800, color: "#A07840" }}>{dress.price} <span style={{ fontSize: 14 }}>د.ب</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "#A07840" }}>{dress.price} <span style={{ fontSize: 14 }}>د.ب</span></div>
+            {dress.discountPct > 0 && dress.originalPrice && (
+              <>
+                <span style={{ fontSize: 16, color: "#B0A090", textDecoration: "line-through" }}>{dress.originalPrice} د.ب</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: "#C0392B", padding: "3px 10px", borderRadius: 20 }}>خصم {dress.discountPct}%</span>
+              </>
+            )}
+          </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#2C1A0A", marginBottom: 4 }}>{dress.name}</div>
             {dress.rating > 0 && (
@@ -181,11 +191,20 @@ export default function DressDetailPage() {
             </div>
           </Link>
           {dress.available ? (
-            <Link href={`/dress/${id}/book`} style={{ flex: 1 }}>
-              <button style={{ width: "100%", height: 50, borderRadius: 14, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1A0A", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, boxShadow: "0 4px 16px rgba(201,169,110,0.3)" }}>
-                احجزي الآن — {dress.price} د.ب
+            <>
+              <button onClick={() => {
+                  addItem({ dressId: id as string, dressName: dress.name, image: dress.images?.[0] || "", pricePerDay: dress.price, startDate: "", endDate: "", size: "" });
+                  router.push("/cart");
+                }}
+                style={{ height: 50, padding: "0 16px", borderRadius: 14, border: "1.5px solid #C9A96E", background: "rgba(201,169,110,0.08)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A07840" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
               </button>
-            </Link>
+              <Link href={`/dress/${id}/book`} style={{ flex: 1 }}>
+                <button style={{ width: "100%", height: 50, borderRadius: 14, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1A0A", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, boxShadow: "0 4px 16px rgba(201,169,110,0.3)" }}>
+                  احجزي الآن — {dress.price} د.ب
+                </button>
+              </Link>
+            </>
           ) : (
             <button disabled style={{ flex: 1, height: 50, borderRadius: 14, border: "none", background: "#EDE4D6", color: "#9B7E60", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15 }}>
               الفستان محجوز حالياً
