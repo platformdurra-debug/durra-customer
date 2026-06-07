@@ -19,6 +19,31 @@ export default function BookPage() {
   const [dress, setDress] = useState<Dress | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [weddingDate, setWeddingDate] = useState("");
+
+  // نوع التأجير من الفستان
+  const isWedding = dress?.rentalType === "wedding";
+  const rentalDays = dress?.rentalDays || (isWedding ? 3 : 1);
+
+  // فستان زفاف: يوم الزفاف يحدد التواريخ (قبل + الزفاف + بعد)
+  useEffect(() => {
+    if (isWedding && weddingDate) {
+      const wd = new Date(weddingDate);
+      const start = new Date(wd); start.setDate(wd.getDate() - 1);  // يوم قبل
+      const end = new Date(wd); end.setDate(wd.getDate() + 1);       // يوم بعد
+      setStartDate(start.toISOString().split("T")[0]);
+      setEndDate(end.toISOString().split("T")[0]);
+    }
+  }, [weddingDate, isWedding]);
+
+  // فستان عادي: يوم البداية + rentalDays
+  useEffect(() => {
+    if (!isWedding && startDate && dress) {
+      const s = new Date(startDate);
+      const e = new Date(s); e.setDate(s.getDate() + (rentalDays - 1));
+      setEndDate(e.toISOString().split("T")[0]);
+    }
+  }, [startDate, isWedding, dress, rentalDays]);
   const [size, setSize] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -130,11 +155,30 @@ export default function BookPage() {
         )}
 
         {/* Dates */}
-        <label style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, display: "block", marginBottom: 6, textAlign: "right" }}>تاريخ الاستلام</label>
-        <input type="date" style={inputStyle} value={startDate} onChange={e => setStartDate(e.target.value)} min={new Date().toISOString().split("T")[0]} />
-
-        <label style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, display: "block", marginBottom: 6, textAlign: "right" }}>تاريخ الإرجاع</label>
-        <input type="date" style={inputStyle} value={endDate} onChange={e => setEndDate(e.target.value)} min={startDate} />
+        {isWedding ? (
+          <>
+            <label style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, display: "block", marginBottom: 6, textAlign: "right" }}>تاريخ الزفاف 👰</label>
+            <input type="date" style={inputStyle} value={weddingDate} onChange={e => setWeddingDate(e.target.value)} min={new Date(Date.now() + 86400000).toISOString().split("T")[0]} />
+            {weddingDate && (
+              <div style={{ fontSize: 12, color: "#A07840", background: "rgba(201,169,110,0.08)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, textAlign: "right", lineHeight: 1.8 }}>
+                📅 فترة التأجير 3 أيام:<br/>
+                الاستلام: {new Date(startDate).toLocaleDateString("ar-BH", { weekday: "long", day: "numeric", month: "long" })}<br/>
+                يوم الزفاف: {new Date(weddingDate).toLocaleDateString("ar-BH", { weekday: "long", day: "numeric", month: "long" })}<br/>
+                الإرجاع: {new Date(endDate).toLocaleDateString("ar-BH", { weekday: "long", day: "numeric", month: "long" })}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <label style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, display: "block", marginBottom: 6, textAlign: "right" }}>تاريخ الاستلام</label>
+            <input type="date" style={inputStyle} value={startDate} onChange={e => setStartDate(e.target.value)} min={new Date().toISOString().split("T")[0]} />
+            {startDate && endDate && (
+              <div style={{ fontSize: 12, color: "#A07840", background: "rgba(201,169,110,0.08)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, textAlign: "right" }}>
+                مدة التأجير {rentalDays} {rentalDays === 1 ? "يوم" : "أيام"} · الإرجاع: {new Date(endDate).toLocaleDateString("ar-BH", { day: "numeric", month: "long" })}
+              </div>
+            )}
+          </>
+        )}
 
         {/* Size */}
         <label style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, display: "block", marginBottom: 6, textAlign: "right" }}>المقاس</label>
