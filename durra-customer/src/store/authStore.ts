@@ -15,15 +15,18 @@ const APP_URLS: Record<string, string> = {
 
 function setRoleCookie(role: string) {
   if (typeof document !== "undefined") {
-    const domain = isDev ? "localhost" : ".durrahonline.com";
-    document.cookie = `durra-role=${role};path=/;domain=${domain};max-age=604800;samesite=lax`;
+    const host = window.location.hostname;
+    // على durrahonline.com نشارك الكوكي بين البوابات؛ غير ذلك (vercel.app/localhost) نتركه للدومين الحالي
+    const domainPart = host.endsWith("durrahonline.com") ? ";domain=.durrahonline.com" : "";
+    document.cookie = `durra-role=${role};path=/${domainPart};max-age=604800;samesite=lax`;
   }
 }
 
 function clearRoleCookie() {
   if (typeof document !== "undefined") {
-    const domain = isDev ? "localhost" : ".durrahonline.com";
-    document.cookie = `durra-role=;path=/;domain=${domain};max-age=0`;
+    const host = window.location.hostname;
+    const domainPart = host.endsWith("durrahonline.com") ? ";domain=.durrahonline.com" : "";
+    document.cookie = `durra-role=;path=/${domainPart};max-age=0`;
   }
 }
 
@@ -55,14 +58,29 @@ export const useAuthStore = create<AuthStore>((set) => ({
       set({ error: null, loading: true });
       const result = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, "users", result.user.uid));
-      const userData = snap.data() as User;
-      setRoleCookie(userData.role);
+      let userData = snap.data() as User;
+
+      // احتياطي: لو وثيقة المستخدم مفقودة، أنشئها بدور customer
+      if (!snap.exists() || !userData) {
+        userData = {
+          uid: result.user.uid,
+          email: result.user.email || email,
+          displayName: result.user.displayName || "",
+          phone: "", role: "customer",
+          createdAt: new Date(), points: 0, level: "normal",
+        } as User;
+        await setDoc(doc(db, "users", result.user.uid), userData);
+      }
+
+      const role = userData.role || "customer";
+      setRoleCookie(role);
       set({ user: userData, loading: false });
+
       // redirect after login
-      if (userData.role === "customer") {
+      if (role === "customer") {
         window.location.replace("/");
       } else {
-        redirectToCorrectApp(userData.role);
+        redirectToCorrectApp(role);
       }
     } catch (e: any) {
       const msg = e.code === "auth/wrong-password" || e.code === "auth/user-not-found"
