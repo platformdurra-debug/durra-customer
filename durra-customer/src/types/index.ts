@@ -25,6 +25,10 @@ export interface Dress {
   rating: number;
   reviewCount: number;
   createdAt: Date;
+  rentalType?: "wedding" | "regular";
+  rentalDays?: number;
+  discountPct?: number;
+  originalPrice?: number;
 }
 
 export interface Booking {
