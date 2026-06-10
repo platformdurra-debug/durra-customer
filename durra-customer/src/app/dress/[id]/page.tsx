@@ -105,7 +105,7 @@ export default function DressDetailPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div style={{ fontSize: 24, fontWeight: 800, color: "#A07840" }}>{dress.price} <span style={{ fontSize: 14 }}>د.ب</span></div>
-            {dress.discountPct > 0 && dress.originalPrice && (
+            {(dress.discountPct || 0) > 0 && dress.originalPrice && (
               <>
                 <span style={{ fontSize: 16, color: "#B0A090", textDecoration: "line-through" }}>{dress.originalPrice} د.ب</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: "#C0392B", padding: "3px 10px", borderRadius: 20 }}>خصم {dress.discountPct}%</span>
