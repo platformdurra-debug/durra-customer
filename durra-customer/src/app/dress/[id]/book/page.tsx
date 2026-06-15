@@ -7,15 +7,18 @@ import { Dress } from "@/types";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import PaymentMethods, { PayMethod } from "@/components/PaymentMethods";
-import { useTapPayment } from "@/hooks/useTapPayment";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "@/lib/firebase";
 import { ArrowRight } from "lucide-react";
 
 export default function BookPage() {
   const { id } = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const { startPayment } = useTapPayment();
-  const [payMethod, setPayMethod] = useState<PayMethod>("card");
+  const [payMethod, setPayMethod] = useState<PayMethod>("benefit");
+  const [benefitInfo, setBenefitInfo] = useState<any>({ benefitNumber: "", iban: "", accountName: "" });
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState("");
   const [dress, setDress] = useState<Dress | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -54,12 +57,14 @@ export default function BookPage() {
     Promise.all([
       getDoc(doc(db, "dresses", id as string)),
       getDoc(doc(db, "settings", "legal")),
-    ]).then(([dressSnap, settingsSnap]) => {
+      getDoc(doc(db, "settings", "payment")),
+    ]).then(([dressSnap, settingsSnap, paySnap]) => {
       if (dressSnap.exists()) setDress({ id: dressSnap.id, ...dressSnap.data() } as Dress);
       if (settingsSnap.exists()) {
         setDeliveryPrice(settingsSnap.data()?.deliveryPrice || 0);
         setDepositAmount(settingsSnap.data()?.depositAmount || 0);
       }
+      if (paySnap.exists()) setBenefitInfo(paySnap.data());
       setFetching(false);
     }).catch(() => setFetching(false));
   }, [id]);
@@ -79,34 +84,30 @@ export default function BookPage() {
     setLoading(true);
     try {
       const functions = getFunctions();
-      const createBooking = httpsCallable(functions, "createBookingSecure");
 
-      // السيرفر يحسب السعر ويتحقق من التوفّر وينشئ الحجز
-      const result: any = await createBooking({
-        dressId: id as string,
-        startDate,
-        endDate,
-        size,
-        paymentMethod: payMethod === "cod" ? "cod" : "online",
-      });
-
-      const { bookingId, totalPrice: serverTotal, isCOD } = result.data;
-
-      if (isCOD) { router.push("/orders"); return; }
-
-      const session = await startPayment({
-        bookingId, amount: serverTotal,
-        customerName: user.displayName || "عميلة", customerEmail: user.email || "", customerPhone: user.phone || "",
-        method: payMethod, type: "dress",
-      });
-
-      if (session.redirect_url) {
-        window.location.href = session.redirect_url;
-      } else if (session.status === "dev_mode") {
-        alert("بوابة الدفع غير مفعّلة بعد. استخدمي الدفع عند الاستلام مؤقتاً.");
-      } else {
+      if (payMethod === "cod") {
+        // الدفع عند الاستلام
+        const createBooking = httpsCallable(functions, "createBookingSecure");
+        await createBooking({ dressId: id as string, startDate, endDate, size, paymentMethod: "cod" });
         router.push("/orders");
+        return;
       }
+
+      // تحويل بنفت — لازم إيصال
+      if (!receiptFile) { alert("يرجى رفع صورة إيصال التحويل"); setLoading(false); return; }
+
+      // ارفعي الإيصال للتخزين
+      const path = `receipts/${user.uid}/${Date.now()}_${receiptFile.name}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, receiptFile);
+      const receiptUrl = await getDownloadURL(storageRef);
+
+      // أنشئي حجز بنفت (بانتظار تأكيد الأدمن)
+      const createBenefit = httpsCallable(functions, "createBenefitBooking");
+      await createBenefit({ dressId: id as string, startDate, endDate, size, receiptUrl });
+
+      alert("تم استلام طلبك! سيتم تأكيد حجزك بعد التحقق من التحويل ⏳");
+      router.push("/orders");
     } catch (e: any) {
       // رسائل الأخطاء من السيرفر
       const msg = e?.message || "";
@@ -253,13 +254,49 @@ export default function BookPage() {
         <div style={{ marginBottom: 12 }}>
           <PaymentMethods amount={totalPrice} selected={payMethod} onSelect={setPayMethod} allowCOD={true} />
         </div>
+
+        {/* تفاصيل تحويل بنفت */}
+        {payMethod === "benefit" && (
+          <div style={{ marginBottom: 12, padding: 16, borderRadius: 14, background: "rgba(200,16,46,0.04)", border: "1px solid rgba(200,16,46,0.15)" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#C8102E", marginBottom: 10, textAlign: "right" }}>🇧🇭 حوّلي المبلغ على الحساب التالي:</div>
+            <div style={{ background: "#fff", borderRadius: 10, padding: 12, marginBottom: 12, fontSize: 13, textAlign: "right", lineHeight: 2 }}>
+              {benefitInfo.benefitNumber && <div>📱 رقم بنفت: <b style={{ direction: "ltr", display: "inline-block" }}>{benefitInfo.benefitNumber}</b></div>}
+              {benefitInfo.iban && <div>🏦 IBAN: <b style={{ direction: "ltr", display: "inline-block", fontSize: 11 }}>{benefitInfo.iban}</b></div>}
+              {benefitInfo.accountName && <div>👤 الاسم: <b>{benefitInfo.accountName}</b></div>}
+              <div style={{ color: "#C8102E", fontWeight: 700, marginTop: 4 }}>💰 المبلغ: {totalPrice} د.ب</div>
+              {!benefitInfo.benefitNumber && !benefitInfo.iban && (
+                <div style={{ color: "#9B8577", fontSize: 12 }}>لم تُضف معلومات الحساب بعد — تواصلي مع الدعم</div>
+              )}
+            </div>
+
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#2C1810", marginBottom: 8, textAlign: "right" }}>ارفعي صورة إيصال التحويل *</div>
+            <label style={{ display: "block", border: "2px dashed #D5C9B8", borderRadius: 12, padding: receiptPreview ? 8 : 24, textAlign: "center", cursor: "pointer", background: "#fff" }}>
+              <input type="file" accept="image/*" style={{ display: "none" }}
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) { setReceiptFile(f); setReceiptPreview(URL.createObjectURL(f)); }
+                }} />
+              {receiptPreview ? (
+                <img src={receiptPreview} alt="إيصال" style={{ maxHeight: 180, maxWidth: "100%", borderRadius: 8 }} />
+              ) : (
+                <div style={{ color: "#9B8577" }}>
+                  <div style={{ fontSize: 28, marginBottom: 6 }}>📷</div>
+                  <div style={{ fontSize: 13 }}>اضغطي لرفع صورة الإيصال</div>
+                </div>
+              )}
+            </label>
+            <div style={{ fontSize: 11, color: "#9B8577", marginTop: 8, textAlign: "right" }}>
+              ⏳ سيتم تأكيد حجزك بعد التحقق من التحويل
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bottom Button */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 28px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
         <button onClick={handleBook} disabled={loading || !startDate || !endDate || !size}
           style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading || !startDate || !endDate || !size ? "not-allowed" : "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !startDate || !endDate || !size ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !startDate || !endDate || !size ? "#9B7E60" : "#2C1810", opacity: loading ? 0.7 : 1, transition: "all 0.2s", boxShadow: startDate && endDate && size ? "0 4px 16px rgba(201,169,110,0.3)" : "none" }}>
-          {loading ? "جاري المعالجة..." : payMethod === "cod" ? `تأكيد الحجز${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}` : `ادفعي${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}`}
+          {loading ? "جاري المعالجة..." : payMethod === "cod" ? `تأكيد الحجز${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}` : `إرسال الطلب${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}`}
         </button>
       </div>
     </div>
