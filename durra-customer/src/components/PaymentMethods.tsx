@@ -1,41 +1,18 @@
 "use client";
-import { useState, useEffect } from "react";
 
-// ═══════════════════════════════════════════════════════
-// مكوّن اختيار طريقة الدفع — جاهز لربط Tap Payments
-//
-// كيف تربط Tap لاحقاً:
-// 1. أضف مفاتيح Tap في البيئة: NEXT_PUBLIC_TAP_PUBLIC_KEY
-// 2. في handlePay، استبدل القسم المعلّم بـ [TAP INTEGRATION]
-//    باستدعاء Tap (Hosted Checkout أو Card SDK)
-// 3. طرق الدفع المفعّلة تُدار من لوحة Tap (مو من هنا)
-// ═══════════════════════════════════════════════════════
-
-export type PayMethod = "card" | "applepay" | "googlepay" | "benefit" | "cod";
+export type PayMethod = "benefit" | "cod";
 
 interface Props {
   amount: number;
   onSelect: (method: PayMethod) => void;
-  allowCOD?: boolean;       // السماح بالدفع عند الاستلام
+  allowCOD?: boolean;
   selected: PayMethod;
 }
 
-export default function PaymentMethods({ amount, onSelect, allowCOD = true, selected }: Props) {
-  const [isApplePayAvailable, setApplePayAvailable] = useState(false);
-
-  useEffect(() => {
-    // Apple Pay يظهر فقط على أجهزة Apple
-    if (typeof window !== "undefined" && (window as any).ApplePaySession) {
-      setApplePayAvailable(true);
-    }
-  }, []);
-
+export default function PaymentMethods({ onSelect, allowCOD = true, selected }: Props) {
   const methods: { id: PayMethod; label: string; sub: string; icon: string; show: boolean }[] = [
-    { id: "card",      label: "بطاقة بنكية",        sub: "Visa · Mastercard",     icon: "💳", show: true },
-    { id: "benefit",   label: "بنفت",               sub: "BenefitPay",            icon: "🇧🇭", show: true },
-    { id: "applepay",  label: "Apple Pay",          sub: "الدفع بلمسة",           icon: "", show: isApplePayAvailable },
-    { id: "googlepay", label: "Google Pay",         sub: "الدفع السريع",          icon: "🅖", show: !isApplePayAvailable },
-    { id: "cod",       label: "الدفع عند الاستلام", sub: "نقداً عند استلام الفستان", icon: "💵", show: allowCOD },
+    { id: "benefit", label: "تحويل بنفت",          sub: "BenefitPay — رفع إيصال التحويل", icon: "🇧🇭", show: true },
+    { id: "cod",     label: "الدفع عند الاستلام",   sub: "نقداً عند استلام الفستان",       icon: "💵", show: allowCOD },
   ];
 
   return (
@@ -58,8 +35,8 @@ export default function PaymentMethods({ amount, onSelect, allowCOD = true, sele
               <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1810" }}>{m.label}</div>
               <div style={{ fontSize: 11, color: "#9B8577" }}>{m.sub}</div>
             </div>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: m.id === "applepay" ? "#000" : m.id === "benefit" ? "#C8102E" : "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0, color: "#fff", fontWeight: 800 }}>
-              {m.id === "applepay" ? <span style={{ fontSize: 22 }}></span> : m.icon}
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: m.id === "benefit" ? "#C8102E" : "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+              {m.icon}
             </div>
           </div>
         </button>
