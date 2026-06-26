@@ -6,40 +6,33 @@ import { db } from "@/lib/firebase";
 import { Dress } from "@/types";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import PaymentMethods, { PayMethod } from "@/components/PaymentMethods";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@/lib/firebase";
+import PaymentMethods, { PayMethod, GCC_COUNTRIES } from "@/components/PaymentMethods";
 import { ArrowRight } from "lucide-react";
 
 export default function BookPage() {
   const { id } = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const [payMethod, setPayMethod] = useState<PayMethod>("benefit");
-  const [benefitInfo, setBenefitInfo] = useState<any>({ benefitNumber: "", iban: "", accountName: "" });
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [receiptPreview, setReceiptPreview] = useState("");
+  const [payMethod, setPayMethod] = useState<PayMethod>("paytabs");
+  const [country, setCountry] = useState("BH"); // مفتاح الدولة للدفع الإلكتروني
   const [dress, setDress] = useState<Dress | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [weddingDate, setWeddingDate] = useState("");
 
-  // نوع التأجير من الفستان
   const isWedding = dress?.rentalType === "wedding";
   const rentalDays = dress?.rentalDays || (isWedding ? 3 : 1);
 
-  // فستان زفاف: يوم الزفاف يحدد التواريخ (قبل + الزفاف + بعد)
   useEffect(() => {
     if (isWedding && weddingDate) {
       const wd = new Date(weddingDate);
-      const start = new Date(wd); start.setDate(wd.getDate() - 1);  // يوم قبل
-      const end = new Date(wd); end.setDate(wd.getDate() + 1);       // يوم بعد
+      const start = new Date(wd); start.setDate(wd.getDate() - 1);
+      const end = new Date(wd); end.setDate(wd.getDate() + 1);
       setStartDate(start.toISOString().split("T")[0]);
       setEndDate(end.toISOString().split("T")[0]);
     }
   }, [weddingDate, isWedding]);
 
-  // فستان عادي: يوم البداية + rentalDays
   useEffect(() => {
     if (!isWedding && startDate && dress) {
       const s = new Date(startDate);
@@ -47,6 +40,7 @@ export default function BookPage() {
       setEndDate(e.toISOString().split("T")[0]);
     }
   }, [startDate, isWedding, dress, rentalDays]);
+
   const [size, setSize] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -57,14 +51,12 @@ export default function BookPage() {
     Promise.all([
       getDoc(doc(db, "dresses", id as string)),
       getDoc(doc(db, "settings", "legal")),
-      getDoc(doc(db, "settings", "payment")),
-    ]).then(([dressSnap, settingsSnap, paySnap]) => {
+    ]).then(([dressSnap, settingsSnap]) => {
       if (dressSnap.exists()) setDress({ id: dressSnap.id, ...dressSnap.data() } as Dress);
       if (settingsSnap.exists()) {
         setDeliveryPrice(settingsSnap.data()?.deliveryPrice || 0);
         setDepositAmount(settingsSnap.data()?.depositAmount || 0);
       }
-      if (paySnap.exists()) setBenefitInfo(paySnap.data());
       setFetching(false);
     }).catch(() => setFetching(false));
   }, [id]);
@@ -74,7 +66,7 @@ export default function BookPage() {
     return Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000));
   };
 
-  // للعرض فقط — الحساب الفعلي يصير في السيرفر
+  // للعرض فقط — الحساب الفعلي في السيرفر
   const rentalPrice = dress ? dress.price * calcDays() : 0;
   const totalPrice  = rentalPrice + deliveryPrice + depositAmount;
 
@@ -85,31 +77,43 @@ export default function BookPage() {
     try {
       const functions = getFunctions();
 
+      // 1) أنشئي الحجز في السيرفر (يحسب السعر/العمولة)
+      const createBooking = httpsCallable(functions, "createBookingSecure");
+      const result: any = await createBooking({
+        dressId: id as string, startDate, endDate, size,
+        paymentMethod: payMethod === "cod" ? "cod" : "online",
+      });
+      const { bookingId, totalPrice: serverTotal } = result.data;
+
+      // 2) الدفع عند الاستلام — انتهينا
       if (payMethod === "cod") {
-        // الدفع عند الاستلام
-        const createBooking = httpsCallable(functions, "createBookingSecure");
-        await createBooking({ dressId: id as string, startDate, endDate, size, paymentMethod: "cod" });
         router.push("/orders");
         return;
       }
 
-      // تحويل بنفت — لازم إيصال
-      if (!receiptFile) { alert("يرجى رفع صورة إيصال التحويل"); setLoading(false); return; }
+      // 3) الدفع الإلكتروني — جلسة PayTabs
+      const selectedCountry = GCC_COUNTRIES.find(c => c.code === country) || GCC_COUNTRIES[0];
+      const createSession = httpsCallable(functions, "createPaymentSession");
+      const session: any = await createSession({
+        bookingId,
+        amount: serverTotal,
+        customerName: user.displayName,
+        customerEmail: user.email,
+        customerPhone: user.phone,
+        countryCode: selectedCountry.dial,
+        country: selectedCountry.code,
+        type: "dress",
+      });
 
-      // ارفعي الإيصال للتخزين
-      const path = `receipts/${user.uid}/${Date.now()}_${receiptFile.name}`;
-      const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, receiptFile);
-      const receiptUrl = await getDownloadURL(storageRef);
-
-      // أنشئي حجز بنفت (بانتظار تأكيد الأدمن)
-      const createBenefit = httpsCallable(functions, "createBenefitBooking");
-      await createBenefit({ dressId: id as string, startDate, endDate, size, receiptUrl });
-
-      alert("تم استلام طلبك! سيتم تأكيد حجزك بعد التحقق من التحويل ⏳");
-      router.push("/orders");
+      if (session.data?.redirect_url) {
+        window.location.href = session.data.redirect_url;
+      } else if (session.data?.status === "dev_mode") {
+        alert("بوابة الدفع غير مفعّلة بعد. تم حفظ طلبك.");
+        router.push("/orders");
+      } else {
+        alert("تعذّر بدء الدفع، حاولي مرة ثانية");
+      }
     } catch (e: any) {
-      // رسائل الأخطاء من السيرفر
       const msg = e?.message || "";
       if (msg.includes("محجوز")) alert("عذراً، الفستان محجوز في هذه الفترة");
       else if (msg.includes("غير متاح")) alert("هذا الفستان غير متاح للحجز حالياً");
@@ -134,7 +138,6 @@ export default function BookPage() {
   return (
     <div style={{ minHeight: "100vh", paddingBottom: 120, background: "var(--cream)", fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
 
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "52px 20px 16px", borderBottom: "1px solid #EDE8DF", background: "#fff" }}>
         <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer" }}>
           <ArrowRight size={20} color="#2C1810" />
@@ -144,7 +147,6 @@ export default function BookPage() {
 
       <div style={{ padding: "20px" }}>
 
-        {/* Dress Info */}
         {dress && (
           <div style={{ display: "flex", gap: 12, padding: 16, borderRadius: 20, marginBottom: 20, background: "#fff", border: "1px solid #EDE8DF" }}>
             <img src={dress.images?.[0]} alt={dress.name} style={{ width: 80, height: 96, objectFit: "cover", borderRadius: 12 }} />
@@ -155,7 +157,6 @@ export default function BookPage() {
           </div>
         )}
 
-        {/* Dates */}
         {isWedding ? (
           <>
             <label style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, display: "block", marginBottom: 6, textAlign: "right" }}>تاريخ الزفاف 👰</label>
@@ -181,14 +182,12 @@ export default function BookPage() {
           </>
         )}
 
-        {/* Size */}
         <label style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, display: "block", marginBottom: 6, textAlign: "right" }}>المقاس</label>
         <select style={{ ...inputStyle, textAlign: "right" }} value={size} onChange={e => setSize(e.target.value)}>
           <option value="">اختاري المقاس</option>
           {dress?.size?.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
 
-        {/* Delivery */}
         <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #EDE8DF", padding: "14px 16px", marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -202,7 +201,6 @@ export default function BookPage() {
           </div>
         </div>
 
-        {/* Deposit */}
         {depositAmount > 0 && (
           <div style={{ background: "#FEF9EC", borderRadius: 16, border: "1px solid #F5D88A", padding: "14px 16px", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -215,7 +213,6 @@ export default function BookPage() {
           </div>
         )}
 
-        {/* Price Summary */}
         {startDate && endDate && (
           <div style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #C9A96E", padding: 16, marginBottom: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1810", marginBottom: 12, textAlign: "right" }}>ملخص السعر</div>
@@ -255,48 +252,26 @@ export default function BookPage() {
           <PaymentMethods amount={totalPrice} selected={payMethod} onSelect={setPayMethod} allowCOD={true} />
         </div>
 
-        {/* تفاصيل تحويل بنفت */}
-        {payMethod === "benefit" && (
-          <div style={{ marginBottom: 12, padding: 16, borderRadius: 14, background: "rgba(200,16,46,0.04)", border: "1px solid rgba(200,16,46,0.15)" }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#C8102E", marginBottom: 10, textAlign: "right" }}>🇧🇭 حوّلي المبلغ على الحساب التالي:</div>
-            <div style={{ background: "#fff", borderRadius: 10, padding: 12, marginBottom: 12, fontSize: 13, textAlign: "right", lineHeight: 2 }}>
-              {benefitInfo.benefitNumber && <div>📱 رقم بنفت: <b style={{ direction: "ltr", display: "inline-block" }}>{benefitInfo.benefitNumber}</b></div>}
-              {benefitInfo.iban && <div>🏦 IBAN: <b style={{ direction: "ltr", display: "inline-block", fontSize: 11 }}>{benefitInfo.iban}</b></div>}
-              {benefitInfo.accountName && <div>👤 الاسم: <b>{benefitInfo.accountName}</b></div>}
-              <div style={{ color: "#C8102E", fontWeight: 700, marginTop: 4 }}>💰 المبلغ: {totalPrice} د.ب</div>
-              {!benefitInfo.benefitNumber && !benefitInfo.iban && (
-                <div style={{ color: "#9B8577", fontSize: 12 }}>لم تُضف معلومات الحساب بعد — تواصلي مع الدعم</div>
-              )}
-            </div>
-
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#2C1810", marginBottom: 8, textAlign: "right" }}>ارفعي صورة إيصال التحويل *</div>
-            <label style={{ display: "block", border: "2px dashed #D5C9B8", borderRadius: 12, padding: receiptPreview ? 8 : 24, textAlign: "center", cursor: "pointer", background: "#fff" }}>
-              <input type="file" accept="image/*" style={{ display: "none" }}
-                onChange={e => {
-                  const f = e.target.files?.[0];
-                  if (f) { setReceiptFile(f); setReceiptPreview(URL.createObjectURL(f)); }
-                }} />
-              {receiptPreview ? (
-                <img src={receiptPreview} alt="إيصال" style={{ maxHeight: 180, maxWidth: "100%", borderRadius: 8 }} />
-              ) : (
-                <div style={{ color: "#9B8577" }}>
-                  <div style={{ fontSize: 28, marginBottom: 6 }}>📷</div>
-                  <div style={{ fontSize: 13 }}>اضغطي لرفع صورة الإيصال</div>
-                </div>
-              )}
-            </label>
+        {/* اختيار الدولة — يظهر فقط للدفع الإلكتروني */}
+        {payMethod === "paytabs" && (
+          <div style={{ marginBottom: 12, padding: 16, borderRadius: 14, background: "rgba(26,43,74,0.04)", border: "1px solid rgba(26,43,74,0.12)" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2B4A", marginBottom: 8, textAlign: "right" }}>الدولة (لإتمام الدفع)</div>
+            <select style={{ ...inputStyle, marginBottom: 0, textAlign: "right" }} value={country} onChange={e => setCountry(e.target.value)}>
+              {GCC_COUNTRIES.map(c => (
+                <option key={c.code} value={c.code}>{c.flag} {c.name} (+{c.dial})</option>
+              ))}
+            </select>
             <div style={{ fontSize: 11, color: "#9B8577", marginTop: 8, textAlign: "right" }}>
-              ⏳ سيتم تأكيد حجزك بعد التحقق من التحويل
+              ستُحوّلين لصفحة دفع آمنة — بنفت، بطاقة، أو Apple Pay
             </div>
           </div>
         )}
       </div>
 
-      {/* Bottom Button */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 28px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
         <button onClick={handleBook} disabled={loading || !startDate || !endDate || !size}
           style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading || !startDate || !endDate || !size ? "not-allowed" : "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !startDate || !endDate || !size ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !startDate || !endDate || !size ? "#9B7E60" : "#2C1810", opacity: loading ? 0.7 : 1, transition: "all 0.2s", boxShadow: startDate && endDate && size ? "0 4px 16px rgba(201,169,110,0.3)" : "none" }}>
-          {loading ? "جاري المعالجة..." : payMethod === "cod" ? `تأكيد الحجز${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}` : `إرسال الطلب${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}`}
+          {loading ? "جاري المعالجة..." : payMethod === "cod" ? `تأكيد الحجز${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}` : `المتابعة للدفع${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}`}
         </button>
       </div>
     </div>
