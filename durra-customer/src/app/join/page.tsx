@@ -156,7 +156,7 @@ export default function JoinPage() {
               ] : [
                 "ظهور أمام عرائس البحرين",
                 "إدارة طلباتك من مكان واحد",
-                "نظام دفع آمن عبر PayTabs",
+                "نظام دفع إلكتروني آمن",
                 "باقات اشتراك مرنة",
               ]).map(b => (
                 <div key={b} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, justifyContent: "flex-end" }}>
