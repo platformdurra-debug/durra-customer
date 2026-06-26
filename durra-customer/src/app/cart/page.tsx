@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useCartStore } from "@/store/cartStore";
-import { usePayTabs } from "@/hooks/usePayTabs";
+import { GCC_COUNTRIES } from "@/components/PaymentMethods";
 import { ArrowRight, Trash2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 
@@ -14,7 +14,7 @@ export default function CartPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { items, removeItem, updateItem, clearCart } = useCartStore();
-  const { createSession } = usePayTabs();
+  const [country, setCountry] = useState("BH");
   const [loading, setLoading] = useState(false);
   const [delivery, setDelivery] = useState(0);
   const [deposit, setDeposit] = useState(0);
@@ -46,20 +46,28 @@ export default function CartPage() {
       });
       const { cartGroupId, grandTotal: serverTotal } = result.data;
 
-      const session = await createSession({
+      const selectedCountry = GCC_COUNTRIES.find(c => c.code === country) || GCC_COUNTRIES[0];
+      const createSession = httpsCallable(functions, "createPaymentSession");
+      const session: any = await createSession({
         bookingId: cartGroupId,
         amount: serverTotal,
         customerName: user.displayName || "عميلة",
         customerEmail: user.email || "",
         customerPhone: user.phone || "",
+        countryCode: selectedCountry.dial,
+        country: selectedCountry.code,
+        type: "cart",
       });
 
-      if (session.redirect_url) {
+      if (session.data?.redirect_url) {
         clearCart();
-        window.location.href = session.redirect_url;
-      } else {
+        window.location.href = session.data.redirect_url;
+      } else if (session.data?.status === "dev_mode") {
         clearCart();
+        alert("بوابة الدفع غير مفعّلة بعد. تم حفظ طلبك.");
         router.push("/orders");
+      } else {
+        alert("تعذّر بدء الدفع، حاولي مرة ثانية");
       }
     } catch (e: any) {
       const msg = e?.message || "";
@@ -137,6 +145,10 @@ export default function CartPage() {
             <span style={{ fontSize: 18, fontWeight: 800, color: "#C9A96E" }}>{grandTotal} د.ب</span>
             <span style={{ fontSize: 15, fontWeight: 800, color: "#2C1810" }}>الإجمالي</span>
           </div>
+          <select value={country} onChange={e => setCountry(e.target.value)}
+            style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: "1px solid #EDE8DF", fontSize: 13, fontFamily: "Tajawal", textAlign: "right", marginBottom: 10, background: "#fff", color: "#2C1810" }}>
+            {GCC_COUNTRIES.map(c => (<option key={c.code} value={c.code}>{c.flag} {c.name} (+{c.dial})</option>))}
+          </select>
           <button onClick={checkout} disabled={loading || !allDatesSet}
             style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading || !allDatesSet ? "not-allowed" : "pointer", fontFamily: "Tajawal", fontWeight: 700, fontSize: 15, background: !allDatesSet ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !allDatesSet ? "#9B7E60" : "#2C1810" }}>
             {loading ? "جاري التوجيه للدفع..." : `ادفعي الكل — ${grandTotal} د.ب`}
