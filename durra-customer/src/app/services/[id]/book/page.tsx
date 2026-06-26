@@ -5,14 +5,15 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { usePayTabs } from "@/hooks/usePayTabs";
+import PaymentMethods, { PayMethod, GCC_COUNTRIES } from "@/components/PaymentMethods";
 import { ArrowRight } from "lucide-react";
 
 export default function ServiceBookPage() {
   const { id } = useParams();
   const router = useRouter();
   const { user, loading } = useAuth();
-  const { createSession } = usePayTabs();
+  const [payMethod, setPayMethod] = useState<PayMethod>("paytabs");
+  const [country, setCountry] = useState("BH");
 
   const [provider, setProvider] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -64,22 +65,38 @@ export default function ServiceBookPage() {
         productId: selectedProduct.id,
         date, time, notes,
         addons: selectedAddons,
+        paymentMethod: payMethod === "cod" ? "cod" : "online",
       });
 
       const { bookingId, totalPrice: serverTotal } = result.data;
 
-      const session = await createSession({
+      // الدفع عند الاستلام — انتهينا
+      if (payMethod === "cod") {
+        router.push("/orders");
+        return;
+      }
+
+      // الدفع الإلكتروني — جلسة PayTabs
+      const selectedCountry = GCC_COUNTRIES.find(co => co.code === country) || GCC_COUNTRIES[0];
+      const createSession = httpsCallable(functions, "createPaymentSession");
+      const session: any = await createSession({
         bookingId,
         amount: serverTotal,
         customerName: user.displayName,
         customerEmail: user.email,
         customerPhone: user.phone,
+        countryCode: selectedCountry.dial,
+        country: selectedCountry.code,
+        type: "service",
       });
 
-      if (session.redirect_url) {
-        window.location.href = session.redirect_url;
-      } else {
+      if (session.data?.redirect_url) {
+        window.location.href = session.data.redirect_url;
+      } else if (session.data?.status === "dev_mode") {
+        alert("بوابة الدفع غير مفعّلة بعد. تم حفظ طلبك.");
         router.push("/orders");
+      } else {
+        alert("تعذّر بدء الدفع، حاولي مرة ثانية");
       }
     } catch (e: any) {
       const msg = e?.message || "";
@@ -209,16 +226,25 @@ export default function ServiceBookPage() {
           </div>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, background: "#F0FDF4", border: "1px solid #BBF7D0", marginBottom: 16 }}>
-          <span>🔒</span>
-          <span style={{ fontSize: 12, color: "#065F46" }}>دفع آمن عبر PayTabs</span>
+        <div style={{ marginBottom: 12 }}>
+          <PaymentMethods amount={displayTotal} selected={payMethod} onSelect={setPayMethod} allowCOD={true} />
         </div>
+
+        {payMethod === "paytabs" && (
+          <div style={{ marginBottom: 16, padding: 16, borderRadius: 14, background: "rgba(26,43,74,0.04)", border: "1px solid rgba(26,43,74,0.12)" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2B4A", marginBottom: 8, textAlign: "right" }}>الدولة (لإتمام الدفع)</div>
+            <select style={{ ...inp, marginBottom: 0 }} value={country} onChange={e => setCountry(e.target.value)}>
+              {GCC_COUNTRIES.map(co => (<option key={co.code} value={co.code}>{co.flag} {co.name} (+{co.dial})</option>))}
+            </select>
+            <div style={{ fontSize: 11, color: "#9B8577", marginTop: 8, textAlign: "right" }}>دفع آمن — بنفت، بطاقة، أو Apple Pay</div>
+          </div>
+        )}
       </div>
 
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 28px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
         <button onClick={handleBook} disabled={loading2 || !date || !time || !selectedProduct}
           style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading2 || !date || !time ? "not-allowed" : "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !date || !time ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !date || !time ? "#9B7E60" : "#2C1810", opacity: loading2 ? 0.7 : 1, transition: "all 0.2s", boxShadow: date && time ? "0 4px 16px rgba(201,169,110,0.3)" : "none" }}>
-          {loading2 ? "جاري التوجيه للدفع..." : `ادفعي الآن${selectedProduct ? ` — ${displayTotal} د.ب` : ""}`}
+          {loading2 ? "جاري المعالجة..." : payMethod === "cod" ? `تأكيد الحجز${selectedProduct ? ` — ${displayTotal} د.ب` : ""}` : `المتابعة للدفع${selectedProduct ? ` — ${displayTotal} د.ب` : ""}`}
         </button>
       </div>
     </div>
