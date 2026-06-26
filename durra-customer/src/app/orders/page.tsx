@@ -8,11 +8,13 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 
 const STATUS: Record<string, { label: string; color: string; bg: string }> = {
-  pending:   { label: "انتظار تأكيد", color: "#92400E", bg: "#FEF3C7" },
-  confirmed: { label: "مؤكد ✓",       color: "#065F46", bg: "#D1FAE5" },
-  active:    { label: "نشط",          color: "#1D4ED8", bg: "#DBEAFE" },
-  completed: { label: "مكتمل",        color: "#6B7280", bg: "#F3F4F6" },
-  cancelled: { label: "ملغي",         color: "#991B1B", bg: "#FEE2E2" },
+  pending:           { label: "انتظار الدفع",  color: "#92400E", bg: "#FEF3C7" },
+  awaiting_payment:  { label: "بانتظار الدفع",  color: "#92400E", bg: "#FEF3C7" },
+  paid:              { label: "بانتظار المزوّد", color: "#92400E", bg: "#FEF3C7" },
+  confirmed:         { label: "مؤكد ✓",        color: "#065F46", bg: "#D1FAE5" },
+  active:            { label: "نشط",           color: "#1D4ED8", bg: "#DBEAFE" },
+  completed:         { label: "مكتمل",         color: "#6B7280", bg: "#F3F4F6" },
+  cancelled:         { label: "ملغي",          color: "#991B1B", bg: "#FEE2E2" },
 };
 
 export default function OrdersPage() {
