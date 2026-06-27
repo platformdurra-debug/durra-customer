@@ -5,8 +5,7 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import PaymentMethods, { PayMethod, GCC_COUNTRIES } from "@/components/PaymentMethods";
-import EmailVerifyBanner from "@/components/EmailVerifyBanner";
+import PaymentMethods, { PayMethod } from "@/components/PaymentMethods";
 import { getAuth } from "firebase/auth";
 import { ArrowRight } from "lucide-react";
 
@@ -15,7 +14,6 @@ export default function ServiceBookPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [payMethod, setPayMethod] = useState<PayMethod>("paytabs");
-  const [country, setCountry] = useState("BH");
 
   const [provider, setProvider] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -102,17 +100,18 @@ export default function ServiceBookPage() {
         return;
       }
 
-      // الدفع الإلكتروني — جلسة PayTabs
-      const selectedCountry = GCC_COUNTRIES.find(co => co.code === country) || GCC_COUNTRIES[0];
+      // الدفع الإلكتروني — جلسة PayTabs (رمز الدولة من رقم الحساب المحفوظ)
       const createSession = httpsCallable(functions, "createPaymentSession");
+      const DIAL_TO_ISO: Record<string, string> = { "973": "BH", "966": "SA", "965": "KW", "971": "AE", "974": "QA", "968": "OM" };
+      const userDial = (user as any).dialCode || "973";
       const session: any = await createSession({
         bookingId,
         amount: serverTotal,
         customerName: user.displayName,
         customerEmail: user.email,
         customerPhone: user.phone,
-        countryCode: selectedCountry.dial,
-        country: selectedCountry.code,
+        countryCode: userDial,
+        country: DIAL_TO_ISO[userDial] || "BH",
         type: "service",
       });
 
@@ -253,23 +252,12 @@ export default function ServiceBookPage() {
         )}
 
         <div style={{ marginBottom: 12 }}>
-          {!emailVerified && <EmailVerifyBanner onVerified={() => setEmailVerified(true)} />}
           {onlineEnabled || codEnabled ? (
             <PaymentMethods amount={displayTotal} selected={payMethod} onSelect={setPayMethod} allowCOD={codEnabled} allowOnline={onlineEnabled} />
           ) : (
             <div style={{ padding: 16, borderRadius: 14, background: "#FEF2F2", border: "1px solid #FCA5A5", textAlign: "center", fontSize: 13, color: "#991B1B", fontWeight: 600 }}>الدفع غير متاح حالياً، حاولي لاحقاً</div>
           )}
         </div>
-
-        {payMethod === "paytabs" && (
-          <div style={{ marginBottom: 16, padding: 16, borderRadius: 14, background: "rgba(26,43,74,0.04)", border: "1px solid rgba(26,43,74,0.12)" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2B4A", marginBottom: 8, textAlign: "right" }}>الدولة (لإتمام الدفع)</div>
-            <select style={{ ...inp, marginBottom: 0 }} value={country} onChange={e => setCountry(e.target.value)}>
-              {GCC_COUNTRIES.map(co => (<option key={co.code} value={co.code}>{co.flag} {co.name} (+{co.dial})</option>))}
-            </select>
-            <div style={{ fontSize: 11, color: "#9B8577", marginTop: 8, textAlign: "right" }}>دفع آمن — بنفت، بطاقة، أو Apple Pay</div>
-          </div>
-        )}
       </div>
 
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 28px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
