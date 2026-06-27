@@ -6,8 +6,7 @@ import { db } from "@/lib/firebase";
 import { Dress } from "@/types";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import PaymentMethods, { PayMethod, GCC_COUNTRIES } from "@/components/PaymentMethods";
-import EmailVerifyBanner from "@/components/EmailVerifyBanner";
+import PaymentMethods, { PayMethod } from "@/components/PaymentMethods";
 import { getAuth } from "firebase/auth";
 import { ArrowRight } from "lucide-react";
 
@@ -16,7 +15,6 @@ export default function BookPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [payMethod, setPayMethod] = useState<PayMethod>("paytabs");
-  const [country, setCountry] = useState("BH"); // مفتاح الدولة للدفع الإلكتروني
   const [dress, setDress] = useState<Dress | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -123,17 +121,19 @@ export default function BookPage() {
         return;
       }
 
-      // 3) الدفع الإلكتروني — جلسة PayTabs
-      const selectedCountry = GCC_COUNTRIES.find(c => c.code === country) || GCC_COUNTRIES[0];
+      // 3) الدفع الإلكتروني — جلسة PayTabs (رمز الدولة من رقم الحساب المحفوظ)
       const createSession = httpsCallable(functions, "createPaymentSession");
+      // رمز الدولة من حساب العميلة (محفوظ عند التسجيل) → ISO
+      const DIAL_TO_ISO: Record<string, string> = { "973": "BH", "966": "SA", "965": "KW", "971": "AE", "974": "QA", "968": "OM" };
+      const userDial = (user as any).dialCode || "973";
       const session: any = await createSession({
         bookingId,
         amount: serverTotal,
         customerName: user.displayName,
         customerEmail: user.email,
         customerPhone: user.phone,
-        countryCode: selectedCountry.dial,
-        country: selectedCountry.code,
+        countryCode: userDial,
+        country: DIAL_TO_ISO[userDial] || "BH",
         type: "dress",
       });
 
@@ -279,9 +279,6 @@ export default function BookPage() {
           </div>
         )}
 
-        {/* لافتة تفعيل البريد — تظهر فقط لو غير مفعّل */}
-        {!emailVerified && <EmailVerifyBanner onVerified={() => setEmailVerified(true)} />}
-
         {/* اختيار طريقة الدفع — يحترم تفعيل/إيقاف الأدمن */}
         <div style={{ marginBottom: 12 }}>
           {onlineEnabled || codEnabled ? (
@@ -293,21 +290,6 @@ export default function BookPage() {
             </div>
           )}
         </div>
-
-        {/* اختيار الدولة — يظهر فقط للدفع الإلكتروني */}
-        {payMethod === "paytabs" && (
-          <div style={{ marginBottom: 12, padding: 16, borderRadius: 14, background: "rgba(26,43,74,0.04)", border: "1px solid rgba(26,43,74,0.12)" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2B4A", marginBottom: 8, textAlign: "right" }}>الدولة (لإتمام الدفع)</div>
-            <select style={{ ...inputStyle, marginBottom: 0, textAlign: "right" }} value={country} onChange={e => setCountry(e.target.value)}>
-              {GCC_COUNTRIES.map(c => (
-                <option key={c.code} value={c.code}>{c.flag} {c.name} (+{c.dial})</option>
-              ))}
-            </select>
-            <div style={{ fontSize: 11, color: "#9B8577", marginTop: 8, textAlign: "right" }}>
-              ستُحوّلين لصفحة دفع آمنة — بنفت، بطاقة، أو Apple Pay
-            </div>
-          </div>
-        )}
       </div>
 
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 28px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
