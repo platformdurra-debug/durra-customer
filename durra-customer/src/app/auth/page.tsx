@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/authStore";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { Eye, EyeOff } from "lucide-react";
+import { GCC_COUNTRIES } from "@/components/PaymentMethods";
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -12,6 +13,8 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [dialCode, setDialCode] = useState("973");
+  const [justRegistered, setJustRegistered] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const { login, register, error } = useAuthStore();
@@ -21,10 +24,19 @@ export default function AuthPage() {
 
   const handleSubmit = async () => {
     if (!isLogin && !agreed) { alert("يجب الموافقة على الشروط والأحكام"); return; }
+    if (!isLogin && !phone.trim()) { alert("أدخلي رقم الجوال"); return; }
     setSubmitting(true);
     try {
-      if (isLogin) await login(email, password);
-      else await register(email, password, name, phone);
+      if (isLogin) {
+        await login(email, password);
+      } else {
+        // ندمج رمز الدولة مع الرقم ونخزّنهما (يُستخدمان تلقائياً عند الدفع)
+        const cleanPhone = phone.replace(/\D/g, "").replace(/^0+/, "");
+        const fullPhone = dialCode + cleanPhone;
+        await register(email, password, name, fullPhone, dialCode);
+        // لا نوجّه فوراً — نعرض رسالة تفعيل البريد
+        setJustRegistered(true);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -100,6 +112,25 @@ export default function AuthPage() {
                 </div>
               )}
             </div>
+          ) : justRegistered ? (
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
+              <div style={{ fontSize: 48, marginBottom: 14 }}>📧</div>
+              <div style={{ fontFamily: "Playfair Display, serif", fontSize: 20, fontWeight: 700, color: "var(--dark)", marginBottom: 10 }}>تم إنشاء حسابك! 🎉</div>
+              <div style={{ fontSize: 14, color: "var(--text2)", lineHeight: 1.9, marginBottom: 8, padding: "0 8px" }}>
+                أرسلنا رابط تفعيل إلى بريدك:
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gold-dark)", marginBottom: 16, direction: "ltr" }}>{email}</div>
+              <div style={{ fontSize: 13, color: "var(--text3)", lineHeight: 1.9, marginBottom: 20, padding: "0 8px" }}>
+                افتحي بريدك واضغطي الرابط لتفعيل حسابك. تقدري تتصفّحين الموقع الآن، لكن لإتمام أي حجز لازم تفعّلي بريدك أولاً.
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text3)", background: "var(--cream2)", borderRadius: 10, padding: "10px 14px", marginBottom: 20 }}>
+                💡 ما وصلك الإيميل؟ تأكدي من مجلد الإعلانات أو الـ Spam
+              </div>
+              <button onClick={() => { window.location.replace("/"); }}
+                style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "var(--dark)", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15 }}>
+                ابدئي التصفّح
+              </button>
+            </div>
           ) : (
             <>
               {/* Tabs */}
@@ -113,7 +144,15 @@ export default function AuthPage() {
                 {!isLogin && (
                   <>
                     <input style={inp} placeholder="الاسم الكامل" value={name} onChange={e => setName(e.target.value)} />
-                    <input style={inp} placeholder="رقم الجوال" value={phone} onChange={e => setPhone(e.target.value)} type="tel" />
+                    <div style={{ display: "flex", gap: 8, direction: "rtl" }}>
+                      <select value={dialCode} onChange={e => setDialCode(e.target.value)}
+                        style={{ ...inp, width: 130, flexShrink: 0, paddingLeft: 8, paddingRight: 8, fontWeight: 700 }}>
+                        {GCC_COUNTRIES.map(co => (
+                          <option key={co.code} value={co.dial}>{co.flag} +{co.dial}</option>
+                        ))}
+                      </select>
+                      <input style={{ ...inp, flex: 1, direction: "ltr", textAlign: "left" }} placeholder="رقم الجوال" value={phone} onChange={e => setPhone(e.target.value)} type="tel" />
+                    </div>
                   </>
                 )}
                 <input style={inp} placeholder="البريد الإلكتروني" value={email} onChange={e => setEmail(e.target.value)} type="email" />
