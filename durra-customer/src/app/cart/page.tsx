@@ -2,26 +2,44 @@
 import { useState, useEffect } from "react";
 import { getDoc, doc } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { getAuth } from "firebase/auth";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useCartStore } from "@/store/cartStore";
-import { GCC_COUNTRIES } from "@/components/PaymentMethods";
 import { ArrowRight, Trash2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+
+const DIAL_TO_ISO: Record<string, string> = { "973": "BH", "966": "SA", "965": "KW", "971": "AE", "974": "QA", "968": "OM" };
 
 export default function CartPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { items, removeItem, updateItem, clearCart } = useCartStore();
-  const [country, setCountry] = useState("BH");
   const [loading, setLoading] = useState(false);
   const [delivery, setDelivery] = useState(0);
   const [deposit, setDeposit] = useState(0);
+  // إعدادات الدفع من الأدمن
+  const [onlineEnabled, setOnlineEnabled] = useState(true);
+  const [codEnabled, setCodEnabled] = useState(true);
+  const [payMethod, setPayMethod] = useState<"paytabs" | "cod">("paytabs");
 
   useEffect(() => {
-    getDoc(doc(db, "settings", "legal")).then(snap => {
-      if (snap.exists()) { setDelivery(snap.data()?.deliveryPrice || 0); setDeposit(snap.data()?.depositAmount || 0); }
+    Promise.all([
+      getDoc(doc(db, "settings", "legal")),
+      getDoc(doc(db, "settings", "payment")),
+    ]).then(([legalSnap, paySnap]) => {
+      if (legalSnap.exists()) { setDelivery(legalSnap.data()?.deliveryPrice || 0); setDeposit(legalSnap.data()?.depositAmount || 0); }
+      if (paySnap.exists()) {
+        const pd = paySnap.data();
+        const online = pd?.onlineEnabled !== false;
+        const cod = pd?.codEnabled !== false;
+        setOnlineEnabled(online);
+        setCodEnabled(cod);
+        // اختر الطريقة المتاحة افتراضياً
+        if (!online && cod) setPayMethod("cod");
+        else if (online && !cod) setPayMethod("paytabs");
+      }
     });
   }, []);
 
@@ -36,17 +54,37 @@ export default function CartPage() {
 
   const checkout = async () => {
     if (!user) { router.push("/auth"); return; }
+    // حاجز تفعيل البريد (بصمت)
+    const a = getAuth();
+    if (a.currentUser && !a.currentUser.emailVerified) {
+      await a.currentUser.reload();
+      if (!a.currentUser.emailVerified) {
+        alert("فعّلي بريدك الإلكتروني أولاً لإتمام الحجز");
+        return;
+      }
+    }
     if (!allDatesSet) { alert("أكملي التواريخ والمقاسات لكل الفساتين"); return; }
+    if (!onlineEnabled && !codEnabled) { alert("الدفع غير متاح حالياً"); return; }
     setLoading(true);
     try {
       const functions = getFunctions();
       const createCart = httpsCallable(functions, "createCartBookingSecure");
       const result: any = await createCart({
         items: items.map(it => ({ dressId: it.dressId, startDate: it.startDate, endDate: it.endDate, size: it.size })),
+        paymentMethod: payMethod === "cod" ? "cod" : "online",
       });
-      const { cartGroupId, grandTotal: serverTotal } = result.data;
+      const { cartGroupId, grandTotal: serverTotal, isCOD } = result.data;
 
-      const selectedCountry = GCC_COUNTRIES.find(c => c.code === country) || GCC_COUNTRIES[0];
+      // الدفع عند الاستلام — انتهينا
+      if (payMethod === "cod" || isCOD) {
+        clearCart();
+        router.push("/orders");
+        return;
+      }
+
+      // الدفع الإلكتروني — رمز الدولة من رقم العميلة المحفوظ
+      const phoneDigits = String(user.phone || "").replace(/\D/g, "");
+      const userDial = ["973","966","965","971","974","968"].find(d => phoneDigits.startsWith(d)) || "973";
       const createSession = httpsCallable(functions, "createPaymentSession");
       const session: any = await createSession({
         bookingId: cartGroupId,
@@ -54,8 +92,8 @@ export default function CartPage() {
         customerName: user.displayName || "عميلة",
         customerEmail: user.email || "",
         customerPhone: user.phone || "",
-        countryCode: selectedCountry.dial,
-        country: selectedCountry.code,
+        countryCode: userDial,
+        country: DIAL_TO_ISO[userDial] || "BH",
         type: "cart",
       });
 
@@ -78,6 +116,12 @@ export default function CartPage() {
       setLoading(false);
     }
   };
+
+  const btnLabel = loading
+    ? "جاري المعالجة..."
+    : payMethod === "cod"
+      ? `تأكيد الحجز — ${grandTotal} د.ب`
+      : `ادفعي الكل — ${grandTotal} د.ب`;
 
   return (
     <div style={{ minHeight: "100vh", background: "#FAF7F2", paddingBottom: 140, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
@@ -126,8 +170,14 @@ export default function CartPage() {
                       style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid #EDE8DF", fontSize: 12, fontFamily: "Tajawal" }} />
                   </div>
                 </div>
-                <input value={it.size} onChange={e => updateItem(it.dressId, { size: e.target.value })} placeholder="المقاس"
-                  style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid #EDE8DF", fontSize: 12, fontFamily: "Tajawal", textAlign: "right" }} />
+                {/* المقاس: قائمة من مقاسات الفستان المتاحة (مو إدخال حر) */}
+                <select value={it.size} onChange={e => updateItem(it.dressId, { size: e.target.value })}
+                  style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid #EDE8DF", fontSize: 12, fontFamily: "Tajawal", textAlign: "right", background: "#fff" }}>
+                  <option value="">اختاري المقاس</option>
+                  {(it.availableSizes && it.availableSizes.length > 0 ? it.availableSizes : ["S", "M", "L", "XL"]).map((s: string) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
                 {it.startDate && it.endDate && (
                   <div style={{ fontSize: 12, color: "#A07840", fontWeight: 700, textAlign: "left", marginTop: 8 }}>
                     {itemTotal(it)} د.ب
@@ -141,17 +191,40 @@ export default function CartPage() {
 
       {items.length > 0 && (
         <div style={{ position: "fixed", bottom: 70, left: 0, right: 0, padding: "16px 20px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
             <span style={{ fontSize: 18, fontWeight: 800, color: "#C9A96E" }}>{grandTotal} د.ب</span>
             <span style={{ fontSize: 15, fontWeight: 800, color: "#2C1810" }}>الإجمالي</span>
           </div>
-          <select value={country} onChange={e => setCountry(e.target.value)}
-            style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: "1px solid #EDE8DF", fontSize: 13, fontFamily: "Tajawal", textAlign: "right", marginBottom: 10, background: "#fff", color: "#2C1810" }}>
-            {GCC_COUNTRIES.map(c => (<option key={c.code} value={c.code}>{c.flag} {c.name} (+{c.dial})</option>))}
-          </select>
-          <button onClick={checkout} disabled={loading || !allDatesSet}
-            style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading || !allDatesSet ? "not-allowed" : "pointer", fontFamily: "Tajawal", fontWeight: 700, fontSize: 15, background: !allDatesSet ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !allDatesSet ? "#9B7E60" : "#2C1810" }}>
-            {loading ? "جاري التوجيه للدفع..." : `ادفعي الكل — ${grandTotal} د.ب`}
+
+          {/* اختيار طريقة الدفع — يحترم مفتاح الأدمن */}
+          {(onlineEnabled || codEnabled) ? (
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              {onlineEnabled && (
+                <button onClick={() => setPayMethod("paytabs")}
+                  style={{ flex: 1, padding: "10px", borderRadius: 12, cursor: "pointer", fontFamily: "Tajawal", fontWeight: 700, fontSize: 12,
+                    border: payMethod === "paytabs" ? "1.5px solid #C9A96E" : "1px solid #EDE8DF",
+                    background: payMethod === "paytabs" ? "rgba(201,169,110,0.1)" : "#fff", color: "#2C1810" }}>
+                  💳 إلكتروني
+                </button>
+              )}
+              {codEnabled && (
+                <button onClick={() => setPayMethod("cod")}
+                  style={{ flex: 1, padding: "10px", borderRadius: 12, cursor: "pointer", fontFamily: "Tajawal", fontWeight: 700, fontSize: 12,
+                    border: payMethod === "cod" ? "1.5px solid #C9A96E" : "1px solid #EDE8DF",
+                    background: payMethod === "cod" ? "rgba(201,169,110,0.1)" : "#fff", color: "#2C1810" }}>
+                  💵 عند الاستلام
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ padding: 12, borderRadius: 12, background: "#FEF2F2", border: "1px solid #FCA5A5", textAlign: "center", fontSize: 12, color: "#991B1B", fontWeight: 600, marginBottom: 12 }}>
+              الدفع غير متاح حالياً، حاولي لاحقاً
+            </div>
+          )}
+
+          <button onClick={checkout} disabled={loading || !allDatesSet || (!onlineEnabled && !codEnabled)}
+            style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading || !allDatesSet ? "not-allowed" : "pointer", fontFamily: "Tajawal", fontWeight: 700, fontSize: 15, background: !allDatesSet || (!onlineEnabled && !codEnabled) ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !allDatesSet || (!onlineEnabled && !codEnabled) ? "#9B7E60" : "#2C1810" }}>
+            {btnLabel}
           </button>
         </div>
       )}
