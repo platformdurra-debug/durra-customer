@@ -16,12 +16,13 @@ interface Props {
   amount: number;
   onSelect: (method: PayMethod) => void;
   allowCOD?: boolean;
+  allowOnline?: boolean;
   selected: PayMethod;
 }
 
-export default function PaymentMethods({ onSelect, allowCOD = true, selected }: Props) {
+export default function PaymentMethods({ onSelect, allowCOD = true, allowOnline = true, selected }: Props) {
   const methods: { id: PayMethod; label: string; sub: string; icon: string; show: boolean; bg: string }[] = [
-    { id: "paytabs", label: "الدفع الإلكتروني", sub: "بنفت · بطاقة · Apple Pay", icon: "💳", show: true, bg: "#1A2B4A" },
+    { id: "paytabs", label: "الدفع الإلكتروني", sub: "بنفت · بطاقة · Apple Pay", icon: "💳", show: allowOnline, bg: "#1A2B4A" },
     { id: "cod",     label: "الدفع عند الاستلام", sub: "نقداً عند استلام الفستان", icon: "💵", show: allowCOD, bg: "#FAF7F2" },
   ];
 
