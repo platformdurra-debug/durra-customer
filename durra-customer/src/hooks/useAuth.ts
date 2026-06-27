@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 
 export const useAuth = () => {
-  const { user, loading, error, login, register, logout, init } = useAuthStore();
+  const { user, loading, error, login, register, logout, resendVerification, checkEmailVerified, init } = useAuthStore();
   useEffect(() => { init(); }, []);
-  return { user, loading, error, login, register, logout };
+  return { user, loading, error, login, register, logout, resendVerification, checkEmailVerified };
 };
