@@ -6,6 +6,8 @@ import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import PaymentMethods, { PayMethod, GCC_COUNTRIES } from "@/components/PaymentMethods";
+import EmailVerifyBanner from "@/components/EmailVerifyBanner";
+import { getAuth } from "firebase/auth";
 import { ArrowRight } from "lucide-react";
 
 export default function ServiceBookPage() {
@@ -24,6 +26,9 @@ export default function ServiceBookPage() {
   const [notes, setNotes] = useState("");
   const [loading2, setLoading2] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [onlineEnabled, setOnlineEnabled] = useState(true);
+  const [codEnabled, setCodEnabled] = useState(true);
+  const [emailVerified, setEmailVerified] = useState(true);
 
   useEffect(() => { if (!loading && !user) router.push("/auth"); }, [user, loading]);
 
@@ -33,11 +38,21 @@ export default function ServiceBookPage() {
     Promise.all([
       getDoc(doc(db, "providers", id as string)),
       getDocs(query(collection(db, "providerProducts"), where("providerId", "==", id), where("active", "==", true))),
-    ]).then(([provSnap, prodSnap]) => {
+      getDoc(doc(db, "settings", "payment")),
+    ]).then(([provSnap, prodSnap, paySnap]) => {
       if (provSnap.exists()) setProvider({ id: provSnap.id, ...provSnap.data() });
       const prods = prodSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setProducts(prods);
       if (prods.length > 0) setSelectedProduct(prods[0]);
+      if (paySnap.exists()) {
+        const pd = paySnap.data();
+        setOnlineEnabled(pd?.onlineEnabled !== false);
+        setCodEnabled(pd?.codEnabled !== false);
+        if (pd?.onlineEnabled === false && pd?.codEnabled !== false) setPayMethod("cod");
+        if (pd?.codEnabled === false && pd?.onlineEnabled !== false) setPayMethod("paytabs");
+      }
+      const a = getAuth();
+      setEmailVerified(a.currentUser?.emailVerified ?? false);
       setFetching(false);
     }).catch(() => setFetching(false));
   }, [id, user, loading]);
@@ -54,6 +69,17 @@ export default function ServiceBookPage() {
 
   const handleBook = async () => {
     if (!user) { router.push("/auth"); return; }
+    const a = getAuth();
+    if (a.currentUser && !a.currentUser.emailVerified) {
+      await a.currentUser.reload();
+      if (!a.currentUser.emailVerified) {
+        setEmailVerified(false);
+        alert("فعّلي بريدك الإلكتروني أولاً لإتمام الحجز");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      setEmailVerified(true);
+    }
     if (!date || !time || !selectedProduct) { alert("أكملي جميع الحقول"); return; }
     setLoading2(true);
     try {
@@ -227,7 +253,12 @@ export default function ServiceBookPage() {
         )}
 
         <div style={{ marginBottom: 12 }}>
-          <PaymentMethods amount={displayTotal} selected={payMethod} onSelect={setPayMethod} allowCOD={true} />
+          {!emailVerified && <EmailVerifyBanner onVerified={() => setEmailVerified(true)} />}
+          {onlineEnabled || codEnabled ? (
+            <PaymentMethods amount={displayTotal} selected={payMethod} onSelect={setPayMethod} allowCOD={codEnabled} allowOnline={onlineEnabled} />
+          ) : (
+            <div style={{ padding: 16, borderRadius: 14, background: "#FEF2F2", border: "1px solid #FCA5A5", textAlign: "center", fontSize: 13, color: "#991B1B", fontWeight: 600 }}>الدفع غير متاح حالياً، حاولي لاحقاً</div>
+          )}
         </div>
 
         {payMethod === "paytabs" && (
