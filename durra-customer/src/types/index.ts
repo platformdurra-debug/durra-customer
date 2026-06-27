@@ -1,157 +1,144 @@
-import { create } from "zustand";
-import { User } from "@/types";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
-
-const isDev = process.env.NODE_ENV === "development";
-const APP_URLS: Record<string, string> = {
-  customer:  isDev ? "http://localhost:3000" : (process.env.NEXT_PUBLIC_CUSTOMER_URL  || "https://durrahonline.com"),
-  seller:    isDev ? "http://localhost:3001" : (process.env.NEXT_PUBLIC_SELLER_URL    || "https://seller.durrahonline.com"),
-  provider:  isDev ? "http://localhost:3002" : (process.env.NEXT_PUBLIC_PROVIDER_URL  || "https://provider.durrahonline.com"),
-  admin:     isDev ? "http://localhost:3003" : (process.env.NEXT_PUBLIC_ADMIN_URL     || "https://admin.durrahonline.com"),
-  warehouse: isDev ? "http://localhost:3004" : (process.env.NEXT_PUBLIC_WAREHOUSE_URL || "https://warehouse.durrahonline.com"),
-};
-
-function setRoleCookie(role: string) {
-  if (typeof document !== "undefined") {
-    const host = window.location.hostname;
-    // على durrahonline.com نشارك الكوكي بين البوابات؛ غير ذلك (vercel.app/localhost) نتركه للدومين الحالي
-    const domainPart = host.endsWith("durrahonline.com") ? ";domain=.durrahonline.com" : "";
-    document.cookie = `durra-role=${role};path=/${domainPart};max-age=604800;samesite=lax`;
-  }
+export interface User {
+  uid: string;
+  email: string;
+  displayName: string;
+  phone: string;
+  dialCode?: string;
+  role: "customer" | "seller" | "admin" | "warehouse" | "provider";
+  createdAt: Date;
+  points: number;
+  level: "normal" | "gold" | "vip";
 }
 
-function clearRoleCookie() {
-  if (typeof document !== "undefined") {
-    const host = window.location.hostname;
-    const domainPart = host.endsWith("durrahonline.com") ? ";domain=.durrahonline.com" : "";
-    document.cookie = `durra-role=;path=/${domainPart};max-age=0`;
-  }
+export interface Dress {
+  id: string;
+  sellerId: string;
+  name: string;
+  description: string;
+  price: number;
+  size: string[];
+  color: string;
+  category: string;
+  images: string[];
+  available: boolean;
+  approved: boolean;
+  isVip?: boolean;
+  rating: number;
+  reviewCount: number;
+  createdAt: Date;
+  rentalType?: "wedding" | "regular";
+  rentalDays?: number;
+  discountPct?: number;
+  originalPrice?: number;
 }
 
-function redirectToCorrectApp(role: string) {
-  const targetUrl = APP_URLS[role] || APP_URLS.customer;
-  if (typeof window === "undefined") return;
-  const current = window.location.origin;
-  const target = targetUrl.replace(/\/$/, "");
-  if (!current.includes(target.replace("http://", "").replace("https://", "").split(":")[0])) {
-    window.location.href = target;
-  }
+export interface Booking {
+  id: string;
+  customerId: string;
+  dressId: string;
+  sellerId: string;
+  startDate: Date;
+  endDate: Date;
+  size?: string;
+  rentalPrice?: number;
+  deliveryPrice?: number;
+  depositAmount?: number;
+  totalPrice: number;
+  commission: number;
+  sellerAmount: number;
+  tranRef?: string;
+  status: "pending" | "confirmed" | "active" | "completed" | "cancelled";
+  paymentStatus: "pending" | "held" | "released" | "refunded" | "failed";
+  createdAt: Date;
+  updatedAt?: Date;
 }
 
-let unsubscribe: (() => void) | null = null;
-
-interface AuthStore {
-  user: User | null; loading: boolean; error: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, phone: string, dialCode?: string) => Promise<void>;
-  logout: () => Promise<void>;
-  resendVerification: () => Promise<boolean>;
-  checkEmailVerified: () => Promise<boolean>;
-  init: () => void;
+// ── المزوّد ──
+export interface Provider {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  area: string;
+  price: number;
+  rating: number;
+  reviewCount: number;
+  images: string[];
+  coverImage?: string;
+  logoImage?: string;
+  available: boolean;
+  approved: boolean;
+  plan: "free" | "gold" | "vip";
+  phone?: string;
+  whatsapp?: string;
+  instagram?: string;
+  workingHours?: {
+    from: string;
+    to: string;
+    days: string[];
+  };
+  // حالة المحل
+  status: "open" | "busy" | "closed";
+  statusNote?: string; // ملاحظة مثل "مشغول حتى الساعة 8"
+  ownerId?: string; // uid صاحب المحل
+  createdAt: Date;
 }
 
-export const useAuthStore = create<AuthStore>((set) => ({
-  user: null, loading: true, error: null,
+// ── منتج/خدمة المزوّد ──
+export interface ProviderProduct {
+  id: string;
+  providerId: string;
+  name: string;
+  description: string;
+  price: number;
+  originalPrice?: number; // سعر قبل الخصم
+  images: string[];
+  category: string;
+  duration?: string; // مثل "2 ساعة" أو "يوم كامل"
+  available: boolean;
+  featured: boolean;
+  order: number; // ترتيب العرض
+  updatedAt: Date;
+  createdAt: Date;
+}
 
-  login: async (email, password) => {
-    try {
-      set({ error: null, loading: true });
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      const snap = await getDoc(doc(db, "users", result.user.uid));
-      let userData = snap.data() as User;
+// ── حجز خدمة ──
+export interface ServiceBooking {
+  id: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  providerId: string;
+  providerName: string;
+  productId?: string;
+  productName?: string;
+  date: Date;
+  note?: string;
+  totalPrice: number;
+  commission: number;
+  providerAmount: number;
+  status: "pending" | "confirmed" | "completed" | "cancelled";
+  paymentStatus: "pending" | "held" | "released";
+  createdAt: Date;
+}
 
-      // احتياطي: لو وثيقة المستخدم مفقودة، أنشئها بدور customer
-      if (!snap.exists() || !userData) {
-        userData = {
-          uid: result.user.uid,
-          email: result.user.email || email,
-          displayName: result.user.displayName || "",
-          phone: "", role: "customer",
-          createdAt: new Date(), points: 0, level: "normal",
-        } as User;
-        await setDoc(doc(db, "users", result.user.uid), userData);
-      }
+export interface Review {
+  id: string;
+  userId: string;
+  userName?: string;
+  targetId: string;
+  rating: number;
+  comment: string;
+  images: string[];
+  createdAt: Date;
+}
 
-      const role = userData.role || "customer";
-      setRoleCookie(role);
-      set({ user: userData, loading: false });
-
-      // redirect after login
-      if (role === "customer") {
-        window.location.replace("/");
-      } else {
-        redirectToCorrectApp(role);
-      }
-    } catch (e: any) {
-      const msg = e.code === "auth/wrong-password" || e.code === "auth/user-not-found"
-        ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-        : e.code === "auth/too-many-requests" ? "محاولات كثيرة — انتظري قليلاً" : e.message;
-      set({ error: msg, loading: false });
-    }
-  },
-
-  register: async (email, password, name, phone, dialCode = "973") => {
-    try {
-      set({ error: null, loading: true });
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      const newUser: User = { uid: result.user.uid, email, displayName: name, phone, dialCode, role: "customer", createdAt: new Date(), points: 0, level: "normal" };
-      await setDoc(doc(db, "users", result.user.uid), newUser);
-      // إرسال رابط تفعيل البريد — تتصفّح عادي لكن لا تحجز حتى تفعّل
-      try { await sendEmailVerification(result.user); } catch (ve) { /* تجاهل فشل الإرسال، تقدر تعيده لاحقاً */ }
-      setRoleCookie("customer");
-      set({ user: newUser, loading: false });
-      // لا نوجّه فوراً — صفحة التسجيل تعرض رسالة تفعيل البريد ثم توجّه
-    } catch (e: any) {
-      const msg = e.code === "auth/email-already-in-use" ? "هذا البريد مسجّل مسبقاً" : e.code === "auth/weak-password" ? "كلمة المرور ضعيفة" : e.message;
-      set({ error: msg, loading: false });
-    }
-  },
-
-  logout: async () => {
-    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-    await signOut(auth);
-    clearRoleCookie();
-    set({ user: null, loading: false });
-    if (typeof window !== "undefined") window.location.href = "/auth";
-  },
-
-  // إعادة إرسال رابط التفعيل للبريد
-  resendVerification: async () => {
-    try {
-      if (auth.currentUser) {
-        await sendEmailVerification(auth.currentUser);
-        return true;
-      }
-      return false;
-    } catch { return false; }
-  },
-
-  // التحقق من حالة تفعيل البريد (يعيد تحميل بيانات Firebase)
-  checkEmailVerified: async () => {
-    try {
-      if (auth.currentUser) {
-        await auth.currentUser.reload();
-        return auth.currentUser.emailVerified;
-      }
-      return false;
-    } catch { return false; }
-  },
-
-  init: () => {
-    if (unsubscribe) return;
-    unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          const snap = await getDoc(doc(db, "users", firebaseUser.uid));
-          if (snap.exists()) {
-            const u = snap.data() as User;
-            setRoleCookie(u.role);
-            set({ user: u, loading: false });
-          } else set({ user: null, loading: false });
-        } catch { set({ user: null, loading: false }); }
-      } else { set({ user: null, loading: false }); clearRoleCookie(); }
-    });
-  },
-}));
+export interface WarehouseItem {
+  id: string;
+  dressId: string;
+  bookingId: string;
+  status: "available" | "rented" | "cleaning" | "maintenance";
+  condition: "excellent" | "good" | "fair" | "damaged";
+  lastCleaned: Date;
+  notes: string;
+}
