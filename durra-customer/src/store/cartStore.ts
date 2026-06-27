@@ -9,6 +9,7 @@ export interface CartItem {
   startDate: string;
   endDate: string;
   size: string;
+  availableSizes?: string[];  // المقاسات المتاحة للفستان
 }
 
 interface CartStore {
