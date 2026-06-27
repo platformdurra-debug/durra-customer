@@ -33,7 +33,7 @@ export default function AuthPage() {
         // ندمج رمز الدولة مع الرقم ونخزّنهما (يُستخدمان تلقائياً عند الدفع)
         const cleanPhone = phone.replace(/\D/g, "").replace(/^0+/, "");
         const fullPhone = dialCode + cleanPhone;
-        await register(email, password, name, fullPhone, dialCode);
+        await register(email, password, name, fullPhone);
         // لا نوجّه فوراً — نعرض رسالة تفعيل البريد
         setJustRegistered(true);
       }
