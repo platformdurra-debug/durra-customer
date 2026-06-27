@@ -7,6 +7,8 @@ import { Dress } from "@/types";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import PaymentMethods, { PayMethod, GCC_COUNTRIES } from "@/components/PaymentMethods";
+import EmailVerifyBanner from "@/components/EmailVerifyBanner";
+import { getAuth } from "firebase/auth";
 import { ArrowRight } from "lucide-react";
 
 export default function BookPage() {
@@ -46,17 +48,35 @@ export default function BookPage() {
   const [fetching, setFetching] = useState(true);
   const [deliveryPrice, setDeliveryPrice] = useState(0);
   const [depositAmount, setDepositAmount] = useState(0);
+  // إعدادات الدفع من الأدمن (تفعيل/إيقاف)
+  const [onlineEnabled, setOnlineEnabled] = useState(true);
+  const [codEnabled, setCodEnabled] = useState(true);
+  // حالة تفعيل البريد
+  const [emailVerified, setEmailVerified] = useState(true);
 
   useEffect(() => {
     Promise.all([
       getDoc(doc(db, "dresses", id as string)),
       getDoc(doc(db, "settings", "legal")),
-    ]).then(([dressSnap, settingsSnap]) => {
+      getDoc(doc(db, "settings", "payment")),
+    ]).then(([dressSnap, settingsSnap, paySnap]) => {
       if (dressSnap.exists()) setDress({ id: dressSnap.id, ...dressSnap.data() } as Dress);
       if (settingsSnap.exists()) {
         setDeliveryPrice(settingsSnap.data()?.deliveryPrice || 0);
         setDepositAmount(settingsSnap.data()?.depositAmount || 0);
       }
+      if (paySnap.exists()) {
+        const pd = paySnap.data();
+        // الافتراضي مفعّل ما لم يُغلق صراحة
+        setOnlineEnabled(pd?.onlineEnabled !== false);
+        setCodEnabled(pd?.codEnabled !== false);
+        // لو الإلكتروني مغلق، حوّلي الاختيار لكاش
+        if (pd?.onlineEnabled === false && pd?.codEnabled !== false) setPayMethod("cod");
+        if (pd?.codEnabled === false && pd?.onlineEnabled !== false) setPayMethod("paytabs");
+      }
+      // تحقق من تفعيل البريد
+      const a = getAuth();
+      setEmailVerified(a.currentUser?.emailVerified ?? false);
       setFetching(false);
     }).catch(() => setFetching(false));
   }, [id]);
@@ -72,6 +92,18 @@ export default function BookPage() {
 
   const handleBook = async () => {
     if (!user) { router.push("/auth"); return; }
+    // حاجز تفعيل البريد
+    const a = getAuth();
+    if (a.currentUser && !a.currentUser.emailVerified) {
+      await a.currentUser.reload();
+      if (!a.currentUser.emailVerified) {
+        setEmailVerified(false);
+        alert("فعّلي بريدك الإلكتروني أولاً لإتمام الحجز");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      setEmailVerified(true);
+    }
     if (!startDate || !endDate || !size) { alert("أكملي جميع الحقول"); return; }
     setLoading(true);
     try {
@@ -247,9 +279,19 @@ export default function BookPage() {
           </div>
         )}
 
-        {/* اختيار طريقة الدفع */}
+        {/* لافتة تفعيل البريد — تظهر فقط لو غير مفعّل */}
+        {!emailVerified && <EmailVerifyBanner onVerified={() => setEmailVerified(true)} />}
+
+        {/* اختيار طريقة الدفع — يحترم تفعيل/إيقاف الأدمن */}
         <div style={{ marginBottom: 12 }}>
-          <PaymentMethods amount={totalPrice} selected={payMethod} onSelect={setPayMethod} allowCOD={true} />
+          {onlineEnabled || codEnabled ? (
+            <PaymentMethods amount={totalPrice} selected={payMethod} onSelect={setPayMethod}
+              allowCOD={codEnabled} allowOnline={onlineEnabled} />
+          ) : (
+            <div style={{ padding: 16, borderRadius: 14, background: "#FEF2F2", border: "1px solid #FCA5A5", textAlign: "center", fontSize: 13, color: "#991B1B", fontWeight: 600 }}>
+              الدفع غير متاح حالياً، حاولي لاحقاً
+            </div>
+          )}
         </div>
 
         {/* اختيار الدولة — يظهر فقط للدفع الإلكتروني */}
@@ -269,7 +311,7 @@ export default function BookPage() {
       </div>
 
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 28px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
-        <button onClick={handleBook} disabled={loading || !startDate || !endDate || !size}
+        <button onClick={handleBook} disabled={loading || !startDate || !endDate || !size || (!onlineEnabled && !codEnabled)}
           style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading || !startDate || !endDate || !size ? "not-allowed" : "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !startDate || !endDate || !size ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !startDate || !endDate || !size ? "#9B7E60" : "#2C1810", opacity: loading ? 0.7 : 1, transition: "all 0.2s", boxShadow: startDate && endDate && size ? "0 4px 16px rgba(201,169,110,0.3)" : "none" }}>
           {loading ? "جاري المعالجة..." : payMethod === "cod" ? `تأكيد الحجز${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}` : `المتابعة للدفع${startDate && endDate ? ` — ${totalPrice} د.ب` : ""}`}
         </button>
