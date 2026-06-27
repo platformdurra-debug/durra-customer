@@ -102,8 +102,10 @@ export default function ServiceBookPage() {
 
       // الدفع الإلكتروني — جلسة PayTabs (رمز الدولة من رقم الحساب المحفوظ)
       const createSession = httpsCallable(functions, "createPaymentSession");
+      // استخرج رمز الدولة من رقم الجوال المحفوظ (يبدأ بمفتاح الدولة)
       const DIAL_TO_ISO: Record<string, string> = { "973": "BH", "966": "SA", "965": "KW", "971": "AE", "974": "QA", "968": "OM" };
-      const userDial = (user as any).dialCode || "973";
+      const phoneDigits = String(user.phone || "").replace(/\D/g, "");
+      const userDial = ["973","966","965","971","974","968"].find(d => phoneDigits.startsWith(d)) || "973";
       const session: any = await createSession({
         bookingId,
         amount: serverTotal,
