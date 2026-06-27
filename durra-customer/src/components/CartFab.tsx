@@ -10,10 +10,10 @@ export default function CartFab() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // نخفيه في صفحات معينة
+  // نخفيه في صفحات معينة فقط — لكن يظهر دائماً (حتى فارغاً) ليعرف الزبون بوجوده
   const hidden = ["/auth", "/cart"].some(p => path.startsWith(p)) ||
     ["/admin", "/seller", "/provider", "/warehouse"].some(p => path.startsWith(p));
-  if (hidden || !mounted || items.length === 0) return null;
+  if (hidden || !mounted) return null;
 
   return (
     <Link href="/cart" style={{ textDecoration: "none" }}>
@@ -29,6 +29,7 @@ export default function CartFab() {
           <circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/>
           <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>
         </svg>
+        {items.length > 0 && (
         <div style={{
           position: "absolute", top: -4, right: -4,
           minWidth: 22, height: 22, borderRadius: 11,
@@ -39,6 +40,7 @@ export default function CartFab() {
         }}>
           {items.length}
         </div>
+        )}
       </div>
     </Link>
   );
