@@ -3,7 +3,8 @@
 export type PayMethod = "paytabs" | "cod";
 
 // دول الخليج لاختيار مفتاح الدولة عند الدفع الإلكتروني
-export const GCC_COUNTRIES = [
+export interface GccCountry { code: string; dial: string; name: string; flag: string; }
+export const GCC_COUNTRIES: GccCountry[] = [
   { code: "BH", dial: "973", name: "البحرين", flag: "🇧🇭" },
   { code: "SA", dial: "966", name: "السعودية", flag: "🇸🇦" },
   { code: "KW", dial: "965", name: "الكويت", flag: "🇰🇼" },
