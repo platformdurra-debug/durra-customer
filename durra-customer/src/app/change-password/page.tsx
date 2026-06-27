@@ -1,43 +1,28 @@
 "use client";
 import { useState, useEffect } from "react";
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
+import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 export default function ChangePasswordPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [current, setCurrent] = useState("");
-  const [newPass, setNewPass] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [done, setDone] = useState(false);
+  const [sent, setSent] = useState(false);
 
   useEffect(() => { if (!authLoading && !user) router.push("/auth"); }, [user, authLoading]);
 
-  const inp: React.CSSProperties = {
-    width: "100%", padding: "13px 16px", borderRadius: 14,
-    border: "1.5px solid #E8DDD0", fontSize: 14,
-    fontFamily: "Tajawal, sans-serif", background: "#fff",
-    color: "#2C1A0A", outline: "none", textAlign: "right", direction: "rtl",
-  };
-
-  const handleSubmit = async () => {
-    if (!user?.email || !current || !newPass || newPass !== confirm) { setError("تأكدي من تطابق كلمتي المرور"); return; }
-    if (newPass.length < 6) { setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل"); return; }
+  const handleSendReset = async () => {
+    if (!user?.email) { setError("لا يوجد بريد مرتبط بحسابك"); return; }
     setLoading(true); setError("");
     try {
-      const cred = EmailAuthProvider.credential(user.email, current);
-      await reauthenticateWithCredential(user as any, cred);
-      await updatePassword(user as any, newPass);
-      setDone(true);
-      setTimeout(() => router.push("/profile"), 2000);
+      const auth = getAuth();
+      await sendPasswordResetEmail(auth, user.email);
+      setSent(true);
     } catch {
-      setError("كلمة المرور الحالية غير صحيحة");
+      setError("تعذّر إرسال الرابط، حاولي بعد قليل");
     } finally { setLoading(false); }
   };
 
@@ -48,46 +33,52 @@ export default function ChangePasswordPage() {
   );
 
   return (
-    <div style={{ background: "#FAF7F2", minHeight: "100vh", fontFamily: "Tajawal, sans-serif", direction: "rtl", padding: "52px 20px 40px" }}>
-      <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer", marginBottom: 20, display: "flex", alignItems: "center", gap: 4 }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9B7E60" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-        <span style={{ fontSize: 12, color: "#9B7E60" }}>رجوع</span>
-      </button>
+    <div style={{ minHeight: "100vh", background: "#FAF7F2", fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "52px 20px 16px", borderBottom: "1px solid #EDE8DF", background: "#fff" }}>
+        <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer" }}>
+          <ArrowRight size={20} color="#2C1810" />
+        </button>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "#2C1810" }}>تغيير كلمة المرور</div>
+      </div>
 
-      {done ? (
-        <div style={{ textAlign: "center", padding: "60px 20px" }}>
-          <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#2C1A0A" }}>تم تغيير كلمة المرور!</div>
-        </div>
-      ) : (
-        <>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 700, color: "#2C1A0A", textAlign: "center", marginBottom: 28 }}>تغيير كلمة المرور</div>
-          <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #E8DDD0", padding: "20px", boxShadow: "0 2px 12px rgba(44,26,10,0.06)" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ position: "relative" }}>
-                <input style={inp} type={showCurrent ? "text" : "password"} placeholder="كلمة المرور الحالية" value={current} onChange={e => setCurrent(e.target.value)} />
-                <button onClick={() => setShowCurrent(!showCurrent)} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer" }}>
-                  {showCurrent ? <EyeOff size={16} color="#9B7E60" /> : <Eye size={16} color="#9B7E60" />}
-                </button>
-              </div>
-              <div style={{ position: "relative" }}>
-                <input style={inp} type={showNew ? "text" : "password"} placeholder="كلمة المرور الجديدة" value={newPass} onChange={e => setNewPass(e.target.value)} />
-                <button onClick={() => setShowNew(!showNew)} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer" }}>
-                  {showNew ? <EyeOff size={16} color="#9B7E60" /> : <Eye size={16} color="#9B7E60" />}
-                </button>
-              </div>
-              <input style={inp} type="password" placeholder="تأكيد كلمة المرور الجديدة" value={confirm} onChange={e => setConfirm(e.target.value)} />
-              {error && (
-                <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", fontSize: 13, color: "#DC2626", textAlign: "right" }}>⚠️ {error}</div>
-              )}
-              <button onClick={handleSubmit} disabled={loading || !current || !newPass || !confirm}
-                style={{ width: "100%", padding: "14px", borderRadius: 14, border: "none", cursor: "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !current || !newPass || !confirm ? "#EDE4D6" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !current || !newPass || !confirm ? "#9B7E60" : "#2C1A0A", opacity: loading ? 0.7 : 1, marginTop: 4 }}>
-                {loading ? "جاري التغيير..." : "تغيير كلمة المرور"}
-              </button>
+      <div style={{ padding: "28px 20px", maxWidth: 460, margin: "0 auto" }}>
+        {sent ? (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <div style={{ fontSize: 52, marginBottom: 16 }}>📧</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: "#2C1810", marginBottom: 10 }}>أرسلنا لك الرابط!</div>
+            <div style={{ fontSize: 14, color: "#6B5744", lineHeight: 1.9, marginBottom: 6 }}>
+              أرسلنا رابط إعادة تعيين كلمة المرور إلى:
             </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#A07840", marginBottom: 18, direction: "ltr" }}>{user?.email}</div>
+            <div style={{ fontSize: 13, color: "#9B7E60", lineHeight: 1.9, marginBottom: 20 }}>
+              افتحي بريدك واضغطي الرابط لتعيين كلمة مرور جديدة.
+            </div>
+            <div style={{ fontSize: 12, color: "#92400E", background: "#FEF9EC", borderRadius: 10, padding: "10px 14px", marginBottom: 20 }}>
+              💡 ما وصلك الرابط؟ تأكدي من مجلد الإعلانات أو الـ Spam
+            </div>
+            <button onClick={() => router.push("/profile")}
+              style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1810", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15 }}>
+              رجوع لحسابي
+            </button>
           </div>
-        </>
-      )}
+        ) : (
+          <>
+            <div style={{ fontSize: 48, textAlign: "center", marginBottom: 16 }}>🔐</div>
+            <div style={{ fontSize: 14, color: "#6B5744", lineHeight: 1.9, marginBottom: 24, textAlign: "center" }}>
+              لتغيير كلمة مرورك بأمان، سنرسل رابطاً إلى بريدك المسجّل. اضغطي الرابط واختاري كلمة مرور جديدة.
+            </div>
+            <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #EDE8DF", padding: "14px 16px", marginBottom: 20, textAlign: "right" }}>
+              <div style={{ fontSize: 11, color: "#9B7E60", marginBottom: 4 }}>سيُرسل الرابط إلى</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1810", direction: "ltr", textAlign: "right" }}>{user?.email}</div>
+            </div>
+            {error && <div style={{ fontSize: 13, color: "#C0392B", marginBottom: 16, textAlign: "center", fontWeight: 600 }}>{error}</div>}
+            <button onClick={handleSendReset} disabled={loading}
+              style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", cursor: loading ? "not-allowed" : "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1810", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, opacity: loading ? 0.7 : 1 }}>
+              {loading ? "جاري الإرسال..." : "أرسلي رابط تغيير كلمة المرور"}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
