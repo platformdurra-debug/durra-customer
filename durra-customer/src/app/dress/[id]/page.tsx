@@ -193,7 +193,7 @@ export default function DressDetailPage() {
           {dress.available ? (
             <>
               <button onClick={() => {
-                  addItem({ dressId: id as string, dressName: dress.name, image: dress.images?.[0] || "", pricePerDay: dress.price, startDate: "", endDate: "", size: "" });
+                  addItem({ dressId: id as string, dressName: dress.name, image: dress.images?.[0] || "", pricePerDay: dress.price, startDate: "", endDate: "", size: "", availableSizes: dress.size || [] });
                   router.push("/cart");
                 }}
                 style={{ height: 50, padding: "0 16px", borderRadius: 14, border: "1.5px solid #C9A96E", background: "rgba(201,169,110,0.08)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
