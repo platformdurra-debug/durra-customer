@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { User } from "@/types";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
@@ -47,6 +47,8 @@ interface AuthStore {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string, phone: string) => Promise<void>;
   logout: () => Promise<void>;
+  resendVerification: () => Promise<boolean>;
+  checkEmailVerified: () => Promise<boolean>;
   init: () => void;
 }
 
@@ -96,6 +98,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
       const result = await createUserWithEmailAndPassword(auth, email, password);
       const newUser: User = { uid: result.user.uid, email, displayName: name, phone, role: "customer", createdAt: new Date(), points: 0, level: "normal" };
       await setDoc(doc(db, "users", result.user.uid), newUser);
+      // إرسال رابط تفعيل البريد — تتصفّح عادي لكن لا تحجز حتى تفعّل
+      try { await sendEmailVerification(result.user); } catch (ve) { /* تجاهل فشل الإرسال، تقدر تعيده لاحقاً */ }
       setRoleCookie("customer");
       set({ user: newUser, loading: false });
       window.location.replace("/");
@@ -111,6 +115,28 @@ export const useAuthStore = create<AuthStore>((set) => ({
     clearRoleCookie();
     set({ user: null, loading: false });
     if (typeof window !== "undefined") window.location.href = "/auth";
+  },
+
+  // إعادة إرسال رابط التفعيل للبريد
+  resendVerification: async () => {
+    try {
+      if (auth.currentUser) {
+        await sendEmailVerification(auth.currentUser);
+        return true;
+      }
+      return false;
+    } catch { return false; }
+  },
+
+  // التحقق من حالة تفعيل البريد (يعيد تحميل بيانات Firebase)
+  checkEmailVerified: async () => {
+    try {
+      if (auth.currentUser) {
+        await auth.currentUser.reload();
+        return auth.currentUser.emailVerified;
+      }
+      return false;
+    } catch { return false; }
   },
 
   init: () => {
