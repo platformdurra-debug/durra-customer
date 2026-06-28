@@ -8,18 +8,12 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import Navbar from "@/components/Navbar";
 
-const SERVICES = [
-  { type: "photographer", title: "تصوير العرايس",    desc: "لحظاتك تستحق أن تُخلّد" },
-  { type: "makeup",       title: "مكياج العروس",     desc: "لإطلالة تخطف الأنظار" },
-  { type: "salon",        title: "صالونات التجميل",  desc: "جمالك في أفضل حلة" },
-  { type: "hall",         title: "صالات الأفراح",    desc: "ليلة لا تُنسى" },
-];
-
 export default function HomePage() {
   const router = useRouter();
   const { user, init } = useAuthStore();
   const [dresses, setDresses] = useState<Dress[]>([]);
   const [serviceImages, setServiceImages] = useState<Record<string, string>>({});
+  const [services, setServices] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +23,15 @@ export default function HomePage() {
     Promise.all([
       getDocs(query(collection(db, "dresses"), where("approved", "==", true), limit(20))),
       getDoc(doc(db, "settings", "serviceImages")),
-    ]).then(([dressSnap, imagesSnap]) => {
+      getDocs(collection(db, "serviceCategories")),
+      getDocs(query(collection(db, "providers"), where("approved", "==", true))),
+    ]).then(([dressSnap, imagesSnap, catsSnap, provSnap]) => {
+      // الفئات اللي فيها مزوّد معتمد فقط
+      const approvedTypes = new Set(provSnap.docs.map(d => (d.data() as any).type).filter(Boolean));
+      const cats = catsSnap.docs
+        .map(d => ({ type: (d.data() as any).value, title: (d.data() as any).title, desc: (d.data() as any).desc || "" }))
+        .filter(cat => approvedTypes.has(cat.type));
+      setServices(cats);
       setDresses(dressSnap.docs
         .map(d => ({ id: d.id, ...d.data() }) as Dress)
         .filter((dr: any) => dr.available !== false)
@@ -149,6 +151,7 @@ export default function HomePage() {
       </div>
 
       {/* ══ SERVICES ══ */}
+      {services.length > 0 && (
       <div style={{ padding: "28px 20px 0" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <Link href="/services" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
@@ -162,7 +165,7 @@ export default function HomePage() {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {SERVICES.map(s => (
+          {services.map((s: any) => (
             <Link href={`/services/${s.type}`} key={s.type} style={{ textDecoration: "none" }}>
               <div style={{ borderRadius: 20, overflow: "hidden", position: "relative", height: 140, boxShadow: "0 2px 16px rgba(44,26,10,0.1)", background: "linear-gradient(135deg, #1A0E05, #3D2810)" }}>
                 {serviceImages[s.type] && (
@@ -183,6 +186,7 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+      )}
 
       {/* ══ AI BANNER ══ */}
       <div style={{ padding: "24px 20px 0" }}>
