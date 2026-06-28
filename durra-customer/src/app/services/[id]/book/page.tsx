@@ -79,6 +79,9 @@ export default function ServiceBookPage() {
       setEmailVerified(true);
     }
     if (!date || !time || !selectedProduct) { alert("أكملي جميع الحقول"); return; }
+    // منع التواريخ الماضية
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (new Date(date) < today) { alert("لا يمكن اختيار تاريخ في الماضي"); return; }
     setLoading2(true);
     try {
       const functions = getFunctions();
