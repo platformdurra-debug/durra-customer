@@ -103,6 +103,10 @@ export default function BookPage() {
       setEmailVerified(true);
     }
     if (!startDate || !endDate || !size) { alert("أكملي جميع الحقول"); return; }
+    // منع التواريخ الماضية
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (new Date(startDate) < today) { alert("لا يمكن اختيار تاريخ في الماضي"); return; }
+    if (new Date(endDate) < new Date(startDate)) { alert("تاريخ الإرجاع يجب أن يكون بعد الاستلام"); return; }
     setLoading(true);
     try {
       const functions = getFunctions();
