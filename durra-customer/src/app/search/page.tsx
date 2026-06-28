@@ -16,18 +16,18 @@ export default function SearchPage() {
   const [tab, setTab] = useState<"dresses" | "services">("dresses");
 
   const doSearch = async (q: string) => {
-    if (!q.trim()) return;
     setLoading(true);
     const [d, p] = await Promise.all([
       getDocs(query(collection(db, "dresses"), where("approved", "==", true))),
       getDocs(query(collection(db, "providers"), where("approved", "==", true))),
     ]);
-    const dl = d.docs.map(x => ({ id: x.id, ...x.data() })).filter((x: any) => x.name?.includes(q) || x.color?.includes(q) || x.description?.includes(q));
-    const pl = p.docs.map(x => ({ id: x.id, ...x.data() })).filter((x: any) => x.name?.includes(q) || x.type?.includes(q));
+    const term = q.trim();
+    const dl = d.docs.map(x => ({ id: x.id, ...x.data() })).filter((x: any) => !term || x.name?.includes(term) || x.color?.includes(term) || x.description?.includes(term));
+    const pl = p.docs.map(x => ({ id: x.id, ...x.data() })).filter((x: any) => !term || x.name?.includes(term) || x.type?.includes(term));
     setDresses(dl); setProviders(pl); setLoading(false);
   };
 
-  useEffect(() => { if (search) doSearch(search); }, []);
+  useEffect(() => { doSearch(search); }, []);
 
   const handleSearch = (e: React.FormEvent) => { e.preventDefault(); doSearch(search); };
 
@@ -39,7 +39,7 @@ export default function SearchPage() {
             <button type="submit" style={{ background: "none", border: "none", cursor: "pointer" }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9B7E60" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             </button>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ابحثي عن فستان أو خدمة..." autoFocus
+            <input value={search} onChange={e => { setSearch(e.target.value); doSearch(e.target.value); }} placeholder="ابحثي عن فستان أو خدمة..." autoFocus
               style={{ flex: 1, border: "none", background: "transparent", fontFamily: "Tajawal, sans-serif", fontSize: 14, color: "#2C1A0A", textAlign: "right", direction: "rtl", outline: "none" }} />
           </div>
         </form>
