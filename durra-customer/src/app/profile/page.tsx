@@ -6,6 +6,7 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 
 const MENU = [
+  { icon: "✏️", label: "تعديل بياناتي",  href: "/profile/edit" },
   { icon: "🛍️", label: "طلباتي",       href: "/orders" },
   { icon: "❤️", label: "المفضلة",      href: "/favorites" },
   { icon: "⭐", label: "نقاطي",         href: "/points" },
