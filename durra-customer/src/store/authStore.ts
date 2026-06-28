@@ -1,24 +1,23 @@
 import { create } from "zustand";
 import { User } from "@/types";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
 const isDev = process.env.NODE_ENV === "development";
-const APP_URLS: Record<string, string> = {
-  customer:  isDev ? "http://localhost:3000" : (process.env.NEXT_PUBLIC_CUSTOMER_URL  || "https://durrahonline.com"),
-  seller:    isDev ? "http://localhost:3001" : (process.env.NEXT_PUBLIC_SELLER_URL    || "https://seller.durrahonline.com"),
-  provider:  isDev ? "http://localhost:3002" : (process.env.NEXT_PUBLIC_PROVIDER_URL  || "https://provider.durrahonline.com"),
-  admin:     isDev ? "http://localhost:3003" : (process.env.NEXT_PUBLIC_ADMIN_URL     || "https://admin.durrahonline.com"),
-  warehouse: isDev ? "http://localhost:3004" : (process.env.NEXT_PUBLIC_WAREHOUSE_URL || "https://warehouse.durrahonline.com"),
+const APPS: Record<string, string> = {
+  customer:  isDev ? "http://localhost:3000" : "https://durrahonline.com",
+  seller:    isDev ? "http://localhost:3001" : "https://seller.durrahonline.com",
+  provider:  isDev ? "http://localhost:3002" : "https://provider.durrahonline.com",
+  admin:     isDev ? "http://localhost:3003" : "https://admin.durrahonline.com",
+  warehouse: isDev ? "http://localhost:3004" : "https://warehouse.durrahonline.com",
 };
 
 function setRoleCookie(role: string) {
   if (typeof document !== "undefined") {
     const host = window.location.hostname;
-    // على durrahonline.com نشارك الكوكي بين البوابات؛ غير ذلك (vercel.app/localhost) نتركه للدومين الحالي
     const domainPart = host.endsWith("durrahonline.com") ? ";domain=.durrahonline.com" : "";
-    document.cookie = `durra-role=${role};path=/${domainPart};max-age=604800;samesite=lax`;
+    document.cookie = `durra-role-seller=${role};path=/${domainPart};max-age=604800;samesite=lax`;
   }
 }
 
@@ -26,86 +25,86 @@ function clearRoleCookie() {
   if (typeof document !== "undefined") {
     const host = window.location.hostname;
     const domainPart = host.endsWith("durrahonline.com") ? ";domain=.durrahonline.com" : "";
-    document.cookie = `durra-role=;path=/${domainPart};max-age=0`;
+    document.cookie = `durra-role-seller=;path=/${domainPart};max-age=0`;
   }
 }
 
-function redirectToCorrectApp(role: string) {
-  const targetUrl = APP_URLS[role] || APP_URLS.customer;
-  if (typeof window === "undefined") return;
-  const current = window.location.origin;
-  const target = targetUrl.replace(/\/$/, "");
-  if (!current.includes(target.replace("http://", "").replace("https://", "").split(":")[0])) {
-    window.location.href = target;
-  }
-}
-
+// Module-level unsubscribe — persists across re-renders
 let unsubscribe: (() => void) | null = null;
 
 interface AuthStore {
-  user: User | null; loading: boolean; error: string | null;
+  user: User | null;
+  loading: boolean;
+  error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, phone: string) => Promise<void>;
+  register: (data: {
+    email: string; password: string; name: string; phone: string;
+    whatsapp?: string; area?: string; instagram?: string; description?: string;
+  }) => Promise<boolean>;
   logout: () => Promise<void>;
-  resendVerification: () => Promise<boolean>;
-  checkEmailVerified: () => Promise<boolean>;
   init: () => void;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
-  user: null, loading: true, error: null,
+  user: null,
+  loading: true, // starts true — stays true until onAuthStateChanged fires
+  error: null,
 
   login: async (email, password) => {
     try {
       set({ error: null, loading: true });
       const result = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, "users", result.user.uid));
-      let userData = snap.data() as User;
-
-      // احتياطي: لو وثيقة المستخدم مفقودة، أنشئها بدور customer
-      if (!snap.exists() || !userData) {
-        userData = {
-          uid: result.user.uid,
-          email: result.user.email || email,
-          displayName: result.user.displayName || "",
-          phone: "", role: "customer",
-          createdAt: new Date(), points: 0, level: "normal",
-        } as User;
-        await setDoc(doc(db, "users", result.user.uid), userData);
-      }
-
-      const role = userData.role || "customer";
-      setRoleCookie(role);
+      const userData = snap.data() as User;
+      setRoleCookie(userData.role);
       set({ user: userData, loading: false });
-
-      // redirect after login
-      if (role === "customer") {
-        window.location.replace("/");
-      } else {
-        redirectToCorrectApp(role);
-      }
+      const target = userData.role === "seller"
+        ? `${APPS.seller}/dashboard`
+        : (APPS[userData.role] || APPS.customer);
+      window.location.replace(target);
     } catch (e: any) {
-      const msg = e.code === "auth/wrong-password" || e.code === "auth/user-not-found"
-        ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-        : e.code === "auth/too-many-requests" ? "محاولات كثيرة — انتظري قليلاً" : e.message;
+      const msg =
+        e.code === "auth/wrong-password" || e.code === "auth/user-not-found"
+          ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+          : e.code === "auth/too-many-requests"
+          ? "محاولات كثيرة — انتظري قليلاً"
+          : e.message;
       set({ error: msg, loading: false });
+      throw new Error(msg);
     }
   },
 
-  register: async (email, password, name, phone) => {
+  register: async (data) => {
     try {
-      set({ error: null, loading: true });
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      const newUser: User = { uid: result.user.uid, email, displayName: name, phone, role: "customer", createdAt: new Date(), points: 0, level: "normal" };
-      await setDoc(doc(db, "users", result.user.uid), newUser);
-      // إرسال رابط تفعيل البريد — تتصفّح عادي لكن لا تحجز حتى تفعّل
-      try { await sendEmailVerification(result.user); } catch (ve) { /* تجاهل فشل الإرسال، تقدر تعيده لاحقاً */ }
-      setRoleCookie("customer");
+      set({ error: null });
+      const result = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const uid = result.user.uid;
+      // حساب معرِضة بحالة "بانتظار الموافقة"
+      const newUser: any = {
+        uid, email: data.email, displayName: data.name, phone: data.phone,
+        whatsapp: data.whatsapp || "", area: data.area || "",
+        instagram: data.instagram || "", description: data.description || "",
+        role: "seller", status: "pending",
+        createdAt: new Date(),
+      };
+      await setDoc(doc(db, "users", uid), newUser);
+      // أنشئ طلب موافقة للأدمن (يظهر ببياناته الكاملة)
+      await setDoc(doc(db, "sellerApprovals", uid), {
+        uid, email: data.email, name: data.name, phone: data.phone,
+        whatsapp: data.whatsapp || "", area: data.area || "",
+        instagram: data.instagram || "", description: data.description || "",
+        status: "pending", createdAt: serverTimestamp(),
+      });
+      setRoleCookie("seller");
       set({ user: newUser, loading: false });
-      window.location.replace("/");
+      return true;
     } catch (e: any) {
-      const msg = e.code === "auth/email-already-in-use" ? "هذا البريد مسجّل مسبقاً" : e.code === "auth/weak-password" ? "كلمة المرور ضعيفة" : e.message;
+      const msg =
+        e.code === "auth/email-already-in-use" ? "هذا البريد مسجّل مسبقاً"
+        : e.code === "auth/weak-password" ? "كلمة المرور ضعيفة (6 أحرف على الأقل)"
+        : e.message;
       set({ error: msg, loading: false });
+      return false;
     }
   },
 
@@ -117,30 +116,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
     if (typeof window !== "undefined") window.location.href = "/auth";
   },
 
-  // إعادة إرسال رابط التفعيل للبريد
-  resendVerification: async () => {
-    try {
-      if (auth.currentUser) {
-        await sendEmailVerification(auth.currentUser);
-        return true;
-      }
-      return false;
-    } catch { return false; }
-  },
-
-  // التحقق من حالة تفعيل البريد (يعيد تحميل بيانات Firebase)
-  checkEmailVerified: async () => {
-    try {
-      if (auth.currentUser) {
-        await auth.currentUser.reload();
-        return auth.currentUser.emailVerified;
-      }
-      return false;
-    } catch { return false; }
-  },
-
   init: () => {
-    if (unsubscribe) return;
+    if (unsubscribe) return; // already listening
     unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
@@ -149,9 +126,16 @@ export const useAuthStore = create<AuthStore>((set) => ({
             const u = snap.data() as User;
             setRoleCookie(u.role);
             set({ user: u, loading: false });
-          } else set({ user: null, loading: false });
-        } catch { set({ user: null, loading: false }); }
-      } else { set({ user: null, loading: false }); clearRoleCookie(); }
+          } else {
+            set({ user: null, loading: false });
+          }
+        } catch {
+          set({ user: null, loading: false });
+        }
+      } else {
+        set({ user: null, loading: false });
+        clearRoleCookie();
+      }
     });
   },
 }));
