@@ -117,32 +117,27 @@ export default function ServiceSlugPage() {
 
   return (
     <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 90, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
-      <div style={{ position: "relative", height: 200, background: "#F2EDE4", overflow: "hidden" }}>
-        {provider.coverImage ? (
+      <div style={{ position: "relative", height: 170, background: "linear-gradient(135deg, #1A0E05, #3D2810)", overflow: "hidden" }}>
+        {provider.coverImage && (
           <img src={provider.coverImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        ) : (
-          <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1A0E05, #3D2810)" }} />
         )}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 40%, rgba(250,247,242,1) 100%)" }} />
-        <button onClick={() => router.back()} style={{ position: "absolute", top: 52, right: 16, width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.35) 100%)" }} />
+        <button onClick={() => router.back()} style={{ position: "absolute", top: 52, right: 16, width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2C1A0A" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
 
-      <div style={{ padding: "0 20px", marginTop: -40 }}>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 16 }}>
-          <div style={{ width: 72, height: 72, borderRadius: 18, overflow: "hidden", border: "3px solid #fff", background: "#FAF7F2", flexShrink: 0, boxShadow: "0 2px 12px rgba(44,26,10,0.1)" }}>
-            {provider.logoImage ? <img src={provider.logoImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🏪</div>}
+      <div style={{ padding: "0 20px", marginTop: -44, position: "relative", zIndex: 2 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: 18 }}>
+          <div style={{ width: 88, height: 88, borderRadius: "50%", overflow: "hidden", border: "4px solid #fff", background: "#FAF7F2", boxShadow: "0 4px 16px rgba(44,26,10,0.18)" }}>
+            {provider.logoImage ? <img src={provider.logoImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34 }}>🏪</div>}
           </div>
-          <div style={{ flex: 1, paddingBottom: 4 }}>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, color: "#2C1A0A" }}>{provider.name}</div>
-            <div style={{ fontSize: 12, color: "#9B7E60" }}>{provider.area}</div>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#2C1A0A", marginTop: 12 }}>{provider.name}</div>
+          {provider.area && <div style={{ fontSize: 13, color: "#9B7E60", marginTop: 2 }}>📍 {provider.area}</div>}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 16px", borderRadius: 50, background: "#fff", border: "1px solid #E8DDD0", marginTop: 12, boxShadow: "0 1px 6px rgba(44,26,10,0.05)" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: status.dot }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: status.color }}>{status.label}</span>
           </div>
-        </div>
-
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 50, background: "#fff", border: "1px solid #E8DDD0", marginBottom: 16, boxShadow: "0 1px 6px rgba(44,26,10,0.05)" }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: status.dot }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: status.color }}>{status.label}</span>
         </div>
 
         {provider.rating > 0 && (
