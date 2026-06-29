@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "@/lib/firebase";
 import { Dress } from "@/types";
@@ -42,6 +42,7 @@ export default function BookPage() {
   }, [startDate, isWedding, dress, rentalDays]);
 
   const [size, setSize] = useState("");
+  const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [deliveryPrice, setDeliveryPrice] = useState(0);
@@ -75,6 +76,12 @@ export default function BookPage() {
       // تحقق من تفعيل البريد
       const a = getAuth();
       setEmailVerified(a.currentUser?.emailVerified ?? false);
+      // اجلب العنوان المحفوظ للكستمر
+      if (a.currentUser) {
+        getDoc(doc(db, "users", a.currentUser.uid)).then(us => {
+          if (us.exists() && us.data()?.address) setAddress(us.data()!.address);
+        }).catch(() => {});
+      }
       setFetching(false);
     }).catch(() => setFetching(false));
   }, [id]);
@@ -103,6 +110,7 @@ export default function BookPage() {
       setEmailVerified(true);
     }
     if (!startDate || !endDate || !size) { alert("أكملي جميع الحقول"); return; }
+    if (!address.trim()) { alert("أضيفي عنوان التوصيل"); return; }
     // منع التواريخ الماضية
     const today = new Date(); today.setHours(0, 0, 0, 0);
     if (new Date(startDate) < today) { alert("لا يمكن اختيار تاريخ في الماضي"); return; }
@@ -110,11 +118,16 @@ export default function BookPage() {
     setLoading(true);
     try {
       const functions = getFunctions();
+      // احفظي العنوان في بيانات الكستمر (عشان يجي محفوظ المرة الجاية)
+      const au = getAuth();
+      if (au.currentUser) {
+        try { await updateDoc(doc(db, "users", au.currentUser.uid), { address: address.trim() }); } catch {}
+      }
 
       // 1) أنشئي الحجز في السيرفر (يحسب السعر/العمولة)
       const createBooking = httpsCallable(functions, "createBookingSecure");
       const result: any = await createBooking({
-        dressId: id as string, startDate, endDate, size,
+        dressId: id as string, startDate, endDate, size, address: address.trim(),
         paymentMethod: payMethod === "cod" ? "cod" : "online",
       });
       const { bookingId, totalPrice: serverTotal } = result.data;
@@ -225,6 +238,10 @@ export default function BookPage() {
           <option value="">اختاري المقاس</option>
           {dress?.size?.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+
+        <textarea value={address} onChange={e => setAddress(e.target.value)}
+          placeholder="عنوان التوصيل (المنطقة، المبنى، الشارع، رقم المنزل...)"
+          style={{ ...inputStyle, textAlign: "right", minHeight: 64, resize: "vertical", marginTop: 12 }} />
 
         <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #EDE8DF", padding: "14px 16px", marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
