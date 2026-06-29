@@ -1,218 +1,223 @@
 "use client";
 import { useEffect, useState } from "react";
-import { doc, getDoc, collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "@/lib/firebase";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import Navbar from "@/components/Navbar";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
+import PaymentMethods, { PayMethod } from "@/components/PaymentMethods";
+import { getAuth } from "firebase/auth";
+import { ArrowRight } from "lucide-react";
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  open:   { label: "مفتوح الآن", color: "#065F46", dot: "#34D399" },
-  busy:   { label: "مشغول",      color: "#92400E", dot: "#F59E0B" },
-  closed: { label: "مغلق",       color: "#991B1B", dot: "#EF4444" },
-};
-
-export default function ServiceSlugPage() {
-  const params = useParams();
-  const slug = params?.id as string;
+export default function ServiceBookPage() {
+  const { id } = useParams();
+  const searchParams = useSearchParams();
+  const preProductId = searchParams.get("product");
   const router = useRouter();
+  const { user, loading } = useAuth();
+  const [payMethod, setPayMethod] = useState<PayMethod>("paytabs");
 
-  const [mode, setMode] = useState<"loading" | "category" | "provider">("loading");
-  const [providers, setProviders] = useState<any[]>([]);
-  const [categoryTitle, setCategoryTitle] = useState("");
   const [provider, setProvider] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [notes, setNotes] = useState("");
+  const [address, setAddress] = useState("");
+  const [busyDays, setBusyDays] = useState<string[]>([]);
+  const [isClosed, setIsClosed] = useState(false);
+  const [isLocationBased, setIsLocationBased] = useState(false);
+  const [loading2, setLoading2] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [onlineEnabled, setOnlineEnabled] = useState(true);
+  const [codEnabled, setCodEnabled] = useState(true);
+  const [emailVerified, setEmailVerified] = useState(true);
+
+  useEffect(() => { if (!loading && !user) router.push("/auth"); }, [user, loading]);
 
   useEffect(() => {
-    if (!slug) return;
-    const resolve = async () => {
-      // 1) هل الـ slug فئة خدمات في Firebase؟
-      const catSnap = await getDocs(query(collection(db, "serviceCategories"), where("value", "==", slug)));
+    if (loading || !user?.uid) return;
+    setFetching(true);
+    Promise.all([
+      getDoc(doc(db, "providers", id as string)),
+      getDocs(query(collection(db, "providerProducts"), where("providerId", "==", id), where("active", "==", true))),
+      getDoc(doc(db, "settings", "payment")),
+    ]).then(([provSnap, prodSnap, paySnap]) => {
+      if (provSnap.exists()) {
+        const pdata: any = { id: provSnap.id, ...provSnap.data() };
+        setProvider(pdata);
+        setBusyDays(pdata.busyDays || []);
+        setIsClosed(pdata.closed === true);
+        setIsLocationBased(pdata.isLocationBased === true);
+      }
+      const prods = prodSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setProducts(prods);
+      if (prods.length > 0) {
+        const pre = preProductId ? prods.find((x: any) => x.id === preProductId) : null;
+        setSelectedProduct(pre || prods[0]);
+      }
+      if (paySnap.exists()) {
+        const pd = paySnap.data();
+        setOnlineEnabled(pd?.onlineEnabled !== false);
+        setCodEnabled(pd?.codEnabled !== false);
+        if (pd?.onlineEnabled === false && pd?.codEnabled !== false) setPayMethod("cod");
+        if (pd?.codEnabled === false && pd?.onlineEnabled !== false) setPayMethod("paytabs");
+      }
+      const a = getAuth();
+      setEmailVerified(a.currentUser?.emailVerified ?? false);
+      if (a.currentUser) {
+        getDoc(doc(db, "users", a.currentUser.uid)).then(us => {
+          if (us.exists() && us.data()?.address) setAddress(us.data()!.address);
+        }).catch(() => {});
+      }
+      setFetching(false);
+    }).catch(() => setFetching(false));
+  }, [id, user, loading]);
 
-      if (!catSnap.empty) {
-        // وضع الفئة — اعرض المزودين
-        setCategoryTitle(catSnap.docs[0].data().title);
-        const provSnap = await getDocs(query(
-          collection(db, "providers"),
-          where("approved", "==", true),
-          where("type", "==", slug),
-          orderBy("rating", "desc")
-        ));
-        setProviders(provSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setMode("category");
+  // للعرض فقط
+  const addonsTotal = selectedProduct?.addons
+    ? selectedProduct.addons.filter((a: any) => selectedAddons.includes(a.name)).reduce((s: number, a: any) => s + a.price, 0)
+    : 0;
+  const displayTotal = (selectedProduct?.price || 0) + addonsTotal;
+
+  const toggleAddon = (name: string) => {
+    setSelectedAddons(prev => prev.includes(name) ? prev.filter(a => a !== name) : [...prev, name]);
+  };
+
+  const handleBook = async () => {
+    if (!user) { router.push("/auth"); return; }
+    const a = getAuth();
+    if (a.currentUser && !a.currentUser.emailVerified) {
+      await a.currentUser.reload();
+      if (!a.currentUser.emailVerified) {
+        setEmailVerified(false);
+        alert("فعّلي بريدك الإلكتروني أولاً لإتمام الحجز");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      setEmailVerified(true);
+    }
+    if (!date || !time || !selectedProduct) { alert("أكملي جميع الحقول"); return; }
+    if (!isLocationBased && !address.trim()) { alert("أضيفي عنوان تنفيذ الخدمة / التواصل"); return; }
+    if (isClosed) { alert("هذا المزوّد مغلق حالياً ولا يستقبل طلبات"); return; }
+    if (busyDays.includes(date)) { alert("المزوّد مشغول في هذا التاريخ، اختاري تاريخاً آخر"); return; }
+    // منع التواريخ الماضية
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (new Date(date) < today) { alert("لا يمكن اختيار تاريخ في الماضي"); return; }
+    setLoading2(true);
+    try {
+      const functions = getFunctions();
+      const au = getAuth();
+      if (au.currentUser) {
+        try { await updateDoc(doc(db, "users", au.currentUser.uid), { address: address.trim() }); } catch {}
+      }
+      const createServiceBooking = httpsCallable(functions, "createServiceBookingSecure");
+
+      const result: any = await createServiceBooking({
+        providerId: id,
+        productId: selectedProduct.id,
+        date, time, notes, address: address.trim(),
+        addons: selectedAddons,
+        paymentMethod: payMethod === "cod" ? "cod" : "online",
+      });
+
+      const { bookingId, totalPrice: serverTotal } = result.data;
+
+      // الدفع عند الاستلام — انتهينا
+      if (payMethod === "cod") {
+        router.push("/orders");
         return;
       }
 
-      // 2) وإلا — اعتبره ID مزوّد
-      const provDoc = await getDoc(doc(db, "providers", slug));
-      if (provDoc.exists()) {
-        setProvider({ id: provDoc.id, ...provDoc.data() });
-        const prodSnap = await getDocs(query(collection(db, "providerProducts"), where("providerId", "==", slug), where("active", "==", true)));
-        setProducts(prodSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setMode("provider");
-      } else {
-        setMode("provider"); // يعرض "غير موجود"
-      }
-    };
-    resolve().catch(() => setMode("provider"));
-  }, [slug]);
+      // الدفع الإلكتروني — جلسة PayTabs (رمز الدولة من رقم الحساب المحفوظ)
+      const createSession = httpsCallable(functions, "createPaymentSession");
+      // استخرج رمز الدولة من رقم الجوال المحفوظ (يبدأ بمفتاح الدولة)
+      const DIAL_TO_ISO: Record<string, string> = { "973": "BH", "966": "SA", "965": "KW", "971": "AE", "974": "QA", "968": "OM" };
+      const phoneDigits = String(user.phone || "").replace(/\D/g, "");
+      const userDial = ["973","966","965","971","974","968"].find(d => phoneDigits.startsWith(d)) || "973";
+      const session: any = await createSession({
+        bookingId,
+        amount: serverTotal,
+        customerName: user.displayName,
+        customerEmail: user.email,
+        customerPhone: user.phone,
+        countryCode: userDial,
+        country: DIAL_TO_ISO[userDial] || "BH",
+        type: "service",
+      });
 
-  // ─── شاشة التحميل ───
-  if (mode === "loading") return (
+      if (session.data?.redirect_url) {
+        window.location.href = session.data.redirect_url;
+      } else if (session.data?.status === "dev_mode") {
+        alert("بوابة الدفع غير مفعّلة بعد. تم حفظ طلبك.");
+        router.push("/orders");
+      } else {
+        alert("تعذّر بدء الدفع، حاولي مرة ثانية");
+      }
+    } catch (e: any) {
+      const msg = e?.message || "";
+      if (msg.includes("غير متاح")) alert("هذا المزوّد غير متاح حالياً");
+      else alert("حدث خطأ، حاولي مرة ثانية");
+    } finally {
+      setLoading2(false);
+    }
+  };
+
+  const inp: React.CSSProperties = {
+    width: "100%", padding: "12px 16px", borderRadius: 12,
+    border: "1.5px solid #EDE8DF", fontSize: 14,
+    fontFamily: "Tajawal, sans-serif", background: "#fff",
+    color: "#2C1810", outline: "none", marginBottom: 16,
+    textAlign: "right", direction: "rtl",
+  };
+
+  if (loading || fetching) return (
     <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div>
     </div>
   );
 
-  // ─── وضع الفئة: قائمة المزودين ───
-  if (mode === "category") return (
-    <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 90, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
-      <div style={{ background: "#fff", padding: "52px 20px 16px", borderBottom: "1px solid #E8DDD0" }}>
-        <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer", marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9B7E60" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-          <span style={{ fontSize: 12, color: "#9B7E60" }}>رجوع</span>
-        </button>
-        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#2C1A0A", textAlign: "center" }}>{categoryTitle}</div>
-      </div>
-      <div style={{ padding: "16px 16px 0" }}>
-        {providers.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px" }}>
-            <div style={{ fontSize: 14, color: "#9B7E60" }}>لا يوجد مزودون متاحون حالياً</div>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {providers.map(p => (
-              <Link href={"/services/" + p.id} key={p.id} style={{ textDecoration: "none" }}>
-                <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #E8DDD0", padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 2px 8px rgba(44,26,10,0.05)" }}>
-                  <div style={{ width: 56, height: 56, borderRadius: 16, overflow: "hidden", flexShrink: 0, background: "#F2EDE4" }}>
-                    {p.logoImage ? <img src={p.logoImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🏪</div>}
-                  </div>
-                  <div style={{ flex: 1, textAlign: "right" }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#2C1A0A", marginBottom: 3 }}>{p.name}</div>
-                    <div style={{ fontSize: 12, color: "#9B7E60", marginBottom: 4 }}>{p.area}</div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
-                      <span style={{ fontSize: 12, color: "#9B7E60" }}>({p.reviewCount || 0})</span>
-                      <span style={{ fontSize: 12, color: "#F59E0B" }}>{"★".repeat(Math.round(p.rating || 0))}</span>
-                    </div>
-                  </div>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: p.status === "open" ? "#34D399" : p.status === "busy" ? "#F59E0B" : "#EF4444", flexShrink: 0 }} />
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
-      <Navbar />
-    </div>
-  );
-
-  // ─── وضع المزوّد: صفحة المزوّد ───
   if (!provider) return (
     <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ fontSize: 14, color: "#9B7E60" }}>المزوّد غير موجود</div>
     </div>
   );
 
-  const status = STATUS_CONFIG[provider.status] || STATUS_CONFIG.open;
-
   return (
-    <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 90, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
-      <div style={{ position: "relative", height: 170, background: "linear-gradient(135deg, #1A0E05, #3D2810)", overflow: "hidden" }}>
-        {provider.coverImage && (
-          <img src={provider.coverImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        )}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.35) 100%)" }} />
-        <button onClick={() => router.back()} style={{ position: "absolute", top: 52, right: 16, width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2C1A0A" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+    <div style={{ minHeight: "100vh", paddingBottom: 120, background: "#FAF7F2", fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
+      <div style={{ background: "#fff", padding: "52px 20px 16px", borderBottom: "1px solid #EDE8DF", display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer" }}>
+          <ArrowRight size={20} color="#2C1810" />
         </button>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "#2C1810" }}>تأكيد الحجز</div>
       </div>
 
-      <div style={{ padding: "0 20px", marginTop: -44, position: "relative", zIndex: 2 }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: 18 }}>
-          <div style={{ width: 88, height: 88, borderRadius: "50%", overflow: "hidden", border: "4px solid #fff", background: "#FAF7F2", boxShadow: "0 4px 16px rgba(44,26,10,0.18)" }}>
-            {provider.logoImage ? <img src={provider.logoImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34 }}>🏪</div>}
+      <div style={{ padding: "20px" }}>
+        <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #EDE8DF", padding: "16px 18px", marginBottom: 16, display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 14, overflow: "hidden", background: "#FAF7F2", flexShrink: 0 }}>
+            {provider.logoImage ? <img src={provider.logoImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🏪</div>}
           </div>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#2C1A0A", marginTop: 12 }}>{provider.name}</div>
-          {provider.area && <div style={{ fontSize: 13, color: "#9B7E60", marginTop: 2 }}>📍 {provider.area}</div>}
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 16px", borderRadius: 50, background: "#fff", border: "1px solid #E8DDD0", marginTop: 12, boxShadow: "0 1px 6px rgba(44,26,10,0.05)" }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: status.dot }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: status.color }}>{status.label}</span>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#2C1810" }}>{provider.name}</div>
+            <div style={{ fontSize: 12, color: "#9B7E60" }}>{provider.area}</div>
           </div>
-          {provider.isLocationBased && (
-            <div style={{ width: "100%", marginTop: 14, background: "#fff", borderRadius: 16, border: "1px solid #E8DDD0", padding: "14px 16px", textAlign: "right" }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#A07840", marginBottom: 8 }}>📍 زورينا في المحل</div>
-              {provider.address && <div style={{ fontSize: 13, color: "#5A4A38", lineHeight: 1.7, marginBottom: 10 }}>{provider.address}</div>}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {provider.whatsapp && <a href={`https://wa.me/${String(provider.whatsapp).replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: "#25D366", background: "rgba(37,211,102,0.1)", padding: "7px 14px", borderRadius: 10, textDecoration: "none" }}>واتساب</a>}
-                {provider.instagram && <a href={`https://instagram.com/${String(provider.instagram).replace(/[@\s]/g, "")}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: "#C13584", background: "rgba(193,53,132,0.1)", padding: "7px 14px", borderRadius: 10, textDecoration: "none" }}>انستقرام</a>}
-                {provider.snapchat && <a href={`https://snapchat.com/add/${String(provider.snapchat).replace(/[@\s]/g, "")}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: "#C9A12B", background: "rgba(255,252,0,0.18)", padding: "7px 14px", borderRadius: 10, textDecoration: "none" }}>سناب شات</a>}
-              </div>
-            </div>
-          )}
         </div>
-
-        {provider.rating > 0 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, marginBottom: 14 }}>
-            <span style={{ fontSize: 12, color: "#9B7E60" }}>({provider.reviewCount || 0} تقييم)</span>
-            <span style={{ fontSize: 14, color: "#F59E0B" }}>{"★".repeat(Math.round(provider.rating))}</span>
-          </div>
-        )}
-
-        {provider.description && (
-          <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #E8DDD0", padding: "16px", marginBottom: 16 }}>
-            <div style={{ fontSize: 13, color: "#6B4F35", lineHeight: 1.8, textAlign: "right" }}>{provider.description}</div>
-          </div>
-        )}
 
         {products.length > 0 && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 700, color: "#2C1A0A", marginBottom: 14, textAlign: "right" }}>✦ الخدمات والأسعار</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 13, color: "#6B5744", fontWeight: 600, marginBottom: 10, textAlign: "right" }}>اختاري الخدمة</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {products.map(p => (
-                <div key={p.id} style={{ background: "#fff", borderRadius: 18, border: "1px solid #E8DDD0", overflow: "hidden", boxShadow: "0 2px 10px rgba(44,26,10,0.05)" }}>
-                  {/* صور الخدمة */}
-                  {p.images && p.images.length > 0 && (
-                    <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: p.images.length > 1 ? 6 : 0 }}>
-                      {p.images.map((img: string, idx: number) => (
-                        <img key={idx} src={img} style={{ width: p.images.length > 1 ? 200 : "100%", height: 160, objectFit: "cover", borderRadius: p.images.length > 1 ? 12 : 0, flexShrink: 0 }} />
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ padding: "14px 18px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                      <div style={{ fontSize: 17, fontWeight: 800, color: "#A07840", whiteSpace: "nowrap" }}>{p.price} <span style={{ fontSize: 11 }}>د.ب</span></div>
-                      <div style={{ textAlign: "right", flex: 1, marginRight: 10 }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: "#2C1A0A" }}>{p.name}</div>
-                        {p.duration && <div style={{ fontSize: 11, color: "#9B7E60", marginTop: 2 }}>⏱ {p.duration}</div>}
-                      </div>
-                    </div>
-                    {p.description && <div style={{ fontSize: 12.5, color: "#7A6A58", lineHeight: 1.7, textAlign: "right", marginBottom: p.addons?.length ? 10 : 0 }}>{p.description}</div>}
-                    {/* الإضافات */}
-                    {p.addons && p.addons.length > 0 && (
-                      <div style={{ borderTop: "1px dashed #E8DDD0", paddingTop: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#9B7E60", textAlign: "right", marginBottom: 6 }}>✨ إضافات اختيارية</div>
-                        {p.addons.map((a: any, idx: number) => (
-                          <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#5A4A38", padding: "3px 0" }}>
-                            <span style={{ fontWeight: 700, color: "#A07840" }}>+{a.price} د.ب</span>
-                            <span>{a.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {p.hasDelivery && (
-                      <div style={{ fontSize: 11, color: "#2D8A5E", textAlign: "right", marginTop: 8, fontWeight: 600 }}>🚚 خدمة توصيل متوفرة{p.deliveryPrice ? ` (${p.deliveryPrice} د.ب)` : ""}</div>
-                    )}
-                    {provider.closed ? (
-                      <button disabled style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", background: "#E5E0D8", color: "#9B8E7E", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 14, cursor: "not-allowed", marginTop: 12 }}>
-                        المحل مغلق حالياً
-                      </button>
-                    ) : (
-                      <Link href={`/services/${slug}/book?product=${p.id}`} style={{ textDecoration: "none" }}>
-                        <button style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1A0A", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 14, boxShadow: "0 3px 12px rgba(201,169,110,0.25)", marginTop: 12 }}>
-                          اطلب هذه الخدمة
-                        </button>
-                      </Link>
-                    )}
+                <div key={p.id} onClick={() => { setSelectedProduct(p); setSelectedAddons([]); }}
+                  style={{ background: selectedProduct?.id === p.id ? "rgba(201,169,110,0.08)" : "#fff", borderRadius: 16, border: `1.5px solid ${selectedProduct?.id === p.id ? "#C9A96E" : "#EDE8DF"}`, padding: "14px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.2s" }}>
+                  <div style={{ textAlign: "left" }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "#A07840" }}>{p.price} <span style={{ fontSize: 11 }}>د.ب</span></div>
+                    {p.duration && <div style={{ fontSize: 11, color: "#9B7E60" }}>{p.duration}</div>}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1810" }}>{p.name}</div>
+                    {p.description && <div style={{ fontSize: 11, color: "#9B7E60" }}>{p.description}</div>}
                   </div>
                 </div>
               ))}
@@ -220,11 +225,87 @@ export default function ServiceSlugPage() {
           </div>
         )}
 
-        {products.length === 0 && (
-          <div style={{ textAlign: "center", color: "#9B7E60", padding: "30px 0", fontSize: 14 }}>لا توجد خدمات معروضة حالياً</div>
+        {/* الإضافات */}
+        {selectedProduct?.addons && selectedProduct.addons.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: "#6B5744", fontWeight: 600, marginBottom: 10, textAlign: "right" }}>إضافات اختيارية</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {selectedProduct.addons.map((addon: any) => (
+                <div key={addon.name} onClick={() => toggleAddon(addon.name)}
+                  style={{ background: selectedAddons.includes(addon.name) ? "rgba(201,169,110,0.08)" : "#fff", borderRadius: 14, border: `1.5px solid ${selectedAddons.includes(addon.name) ? "#C9A96E" : "#EDE8DF"}`, padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#A07840" }}>+{addon.price} د.ب</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 13, color: "#2C1810" }}>{addon.name}</span>
+                    <div style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${selectedAddons.includes(addon.name) ? "#C9A96E" : "#EDE8DF"}`, background: selectedAddons.includes(addon.name) ? "#C9A96E" : "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {selectedAddons.includes(addon.name) && <span style={{ color: "#fff", fontSize: 12 }}>✓</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
+
+        <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 6, textAlign: "right" }}>تاريخ الموعد</div>
+        <input type="date" style={{ ...inp, ...(date && busyDays.includes(date) ? { borderColor: "#E74C3C", background: "#FDF0F0" } : {}) }} value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split("T")[0]} />
+        {date && busyDays.includes(date) && <div style={{ fontSize: 12, color: "#E74C3C", fontWeight: 700, marginTop: 6, textAlign: "right" }}>⚠️ المزوّد مشغول في هذا التاريخ، اختاري يوماً آخر</div>}
+
+        <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 6, textAlign: "right" }}>وقت الموعد</div>
+        <input type="time" style={inp} value={time} onChange={e => setTime(e.target.value)} />
+
+        <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 6, textAlign: "right" }}>ملاحظات (اختياري)</div>
+        <textarea style={{ ...inp, height: 80, resize: "none" }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="أي تفاصيل إضافية..." />
+        {isLocationBased ? (
+          <div style={{ ...inp, height: "auto", marginTop: 12, background: "#FFF8EC", border: "1px solid #E8D5A3", color: "#8A6D3B", fontSize: 12.5, lineHeight: 1.7, textAlign: "right" }}>
+            📍 هذه خدمة بموقع — ستذهبين لمقر المزوّد. لا حاجة لإدخال عنوانك.
+          </div>
+        ) : (
+          <textarea style={{ ...inp, height: 70, resize: "none", marginTop: 12 }} value={address} onChange={e => setAddress(e.target.value)} placeholder="عنوان تنفيذ الخدمة / التواصل (المنطقة، المبنى، الشارع...)" />
+        )}
+
+        {selectedProduct && (
+          <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #C9A96E", padding: "16px 18px", marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1810", marginBottom: 12, textAlign: "right" }}>ملخص الحجز</div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: "#9B7E60" }}>{selectedProduct.price} د.ب</span>
+              <span style={{ fontSize: 13, color: "#2C1810" }}>{selectedProduct.name}</span>
+            </div>
+            {selectedProduct.addons?.filter((a: any) => selectedAddons.includes(a.name)).map((a: any) => (
+              <div key={a.name} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 13, color: "#9B7E60" }}>+{a.price} د.ب</span>
+                <span style={{ fontSize: 13, color: "#2C1810" }}>{a.name}</span>
+              </div>
+            ))}
+            {date && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: "#9B7E60" }}>{new Date(date).toLocaleDateString("ar-BH")}</span>
+              <span style={{ fontSize: 13, color: "#2C1810" }}>التاريخ</span>
+            </div>}
+            {time && <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 13, color: "#9B7E60" }}>{time}</span>
+              <span style={{ fontSize: 13, color: "#2C1810" }}>الوقت</span>
+            </div>}
+            <div style={{ borderTop: "1px solid #EDE8DF", paddingTop: 10, marginTop: 10, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 18, fontWeight: 800, color: "#C9A96E" }}>{displayTotal} د.ب</span>
+              <span style={{ fontSize: 15, fontWeight: 800, color: "#2C1810" }}>الإجمالي</span>
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginBottom: 12 }}>
+          {onlineEnabled || codEnabled ? (
+            <PaymentMethods amount={displayTotal} selected={payMethod} onSelect={setPayMethod} allowCOD={codEnabled} allowOnline={onlineEnabled} />
+          ) : (
+            <div style={{ padding: 16, borderRadius: 14, background: "#FEF2F2", border: "1px solid #FCA5A5", textAlign: "center", fontSize: 13, color: "#991B1B", fontWeight: 600 }}>الدفع غير متاح حالياً، حاولي لاحقاً</div>
+          )}
+        </div>
       </div>
-      <Navbar />
+
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 20px 28px", background: "rgba(250,247,242,0.97)", borderTop: "1px solid #EDE8DF", backdropFilter: "blur(10px)" }}>
+        <button onClick={handleBook} disabled={loading2 || !date || !time || !selectedProduct}
+          style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: loading2 || !date || !time ? "not-allowed" : "pointer", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, background: !date || !time ? "#EDE8DF" : "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: !date || !time ? "#9B7E60" : "#2C1810", opacity: loading2 ? 0.7 : 1, transition: "all 0.2s", boxShadow: date && time ? "0 4px 16px rgba(201,169,110,0.3)" : "none" }}>
+          {loading2 ? "جاري المعالجة..." : payMethod === "cod" ? `تأكيد الحجز${selectedProduct ? ` — ${displayTotal} د.ب` : ""}` : `المتابعة للدفع${selectedProduct ? ` — ${displayTotal} د.ب` : ""}`}
+        </button>
+      </div>
     </div>
   );
 }
