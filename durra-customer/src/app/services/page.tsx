@@ -26,24 +26,32 @@ export default function ServiceSlugPage() {
   useEffect(() => {
     if (!slug) return;
     const resolve = async () => {
-      // 1) هل الـ slug فئة خدمات في Firebase؟
       const catSnap = await getDocs(query(collection(db, "serviceCategories"), where("value", "==", slug)));
 
       if (!catSnap.empty) {
-        // وضع الفئة — اعرض المزودين
         setCategoryTitle(catSnap.docs[0].data().title);
-        const provSnap = await getDocs(query(
-          collection(db, "providers"),
-          where("approved", "==", true),
-          where("type", "==", slug),
-          orderBy("rating", "desc")
-        ));
-        setProviders(provSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        try {
+          const provSnap = await getDocs(query(
+            collection(db, "providers"),
+            where("approved", "==", true),
+            where("type", "==", slug),
+            orderBy("rating", "desc")
+          ));
+          setProviders(provSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (indexErr: any) {
+          console.error("🔴 Index Error (أضف composite index في Firebase):", indexErr?.message);
+          // fallback بدون orderBy
+          const provSnap = await getDocs(query(
+            collection(db, "providers"),
+            where("approved", "==", true),
+            where("type", "==", slug)
+          ));
+          setProviders(provSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }
         setMode("category");
         return;
       }
 
-      // 2) وإلا — اعتبره ID مزوّد
       const provDoc = await getDoc(doc(db, "providers", slug));
       if (provDoc.exists()) {
         setProvider({ id: provDoc.id, ...provDoc.data() });
@@ -51,20 +59,21 @@ export default function ServiceSlugPage() {
         setProducts(prodSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         setMode("provider");
       } else {
-        setMode("provider"); // يعرض "غير موجود"
+        setMode("provider");
       }
     };
-    resolve().catch(() => setMode("provider"));
+    resolve().catch((err) => {
+      console.error("🔴 Firebase Error:", err?.message);
+      setMode("provider");
+    });
   }, [slug]);
 
-  // ─── شاشة التحميل ───
   if (mode === "loading") return (
     <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ color: "#C9A96E", fontSize: 32 }}>✦</div>
     </div>
   );
 
-  // ─── وضع الفئة: قائمة المزودين ───
   if (mode === "category") return (
     <div style={{ background: "#FAF7F2", minHeight: "100vh", paddingBottom: 90, fontFamily: "Tajawal, sans-serif", direction: "rtl" }}>
       <div style={{ background: "#fff", padding: "52px 20px 16px", borderBottom: "1px solid #E8DDD0" }}>
@@ -106,7 +115,6 @@ export default function ServiceSlugPage() {
     </div>
   );
 
-  // ─── وضع المزوّد: صفحة المزوّد ───
   if (!provider) return (
     <div style={{ minHeight: "100vh", background: "#FAF7F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ fontSize: 14, color: "#9B7E60" }}>المزوّد غير موجود</div>
@@ -170,7 +178,6 @@ export default function ServiceSlugPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {products.map(p => (
                 <div key={p.id} style={{ background: "#fff", borderRadius: 18, border: "1px solid #E8DDD0", overflow: "hidden", boxShadow: "0 2px 10px rgba(44,26,10,0.05)" }}>
-                  {/* صور الخدمة */}
                   {p.images && p.images.length > 0 && (
                     <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: p.images.length > 1 ? 6 : 0 }}>
                       {p.images.map((img: string, idx: number) => (
@@ -187,7 +194,6 @@ export default function ServiceSlugPage() {
                       </div>
                     </div>
                     {p.description && <div style={{ fontSize: 12.5, color: "#7A6A58", lineHeight: 1.7, textAlign: "right", marginBottom: p.addons?.length ? 10 : 0 }}>{p.description}</div>}
-                    {/* الإضافات */}
                     {p.addons && p.addons.length > 0 && (
                       <div style={{ borderTop: "1px dashed #E8DDD0", paddingTop: 10 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#9B7E60", textAlign: "right", marginBottom: 6 }}>✨ إضافات اختيارية</div>
