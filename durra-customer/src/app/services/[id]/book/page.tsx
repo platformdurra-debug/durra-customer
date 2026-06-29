@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
@@ -22,6 +22,9 @@ export default function ServiceBookPage() {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [notes, setNotes] = useState("");
+  const [address, setAddress] = useState("");
+  const [busyDays, setBusyDays] = useState<string[]>([]);
+  const [isClosed, setIsClosed] = useState(false);
   const [loading2, setLoading2] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [onlineEnabled, setOnlineEnabled] = useState(true);
@@ -38,7 +41,12 @@ export default function ServiceBookPage() {
       getDocs(query(collection(db, "providerProducts"), where("providerId", "==", id), where("active", "==", true))),
       getDoc(doc(db, "settings", "payment")),
     ]).then(([provSnap, prodSnap, paySnap]) => {
-      if (provSnap.exists()) setProvider({ id: provSnap.id, ...provSnap.data() });
+      if (provSnap.exists()) {
+        const pdata: any = { id: provSnap.id, ...provSnap.data() };
+        setProvider(pdata);
+        setBusyDays(pdata.busyDays || []);
+        setIsClosed(pdata.closed === true);
+      }
       const prods = prodSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setProducts(prods);
       if (prods.length > 0) setSelectedProduct(prods[0]);
@@ -51,6 +59,11 @@ export default function ServiceBookPage() {
       }
       const a = getAuth();
       setEmailVerified(a.currentUser?.emailVerified ?? false);
+      if (a.currentUser) {
+        getDoc(doc(db, "users", a.currentUser.uid)).then(us => {
+          if (us.exists() && us.data()?.address) setAddress(us.data()!.address);
+        }).catch(() => {});
+      }
       setFetching(false);
     }).catch(() => setFetching(false));
   }, [id, user, loading]);
@@ -79,18 +92,25 @@ export default function ServiceBookPage() {
       setEmailVerified(true);
     }
     if (!date || !time || !selectedProduct) { alert("أكملي جميع الحقول"); return; }
+    if (!address.trim()) { alert("أضيفي عنوان تنفيذ الخدمة / التواصل"); return; }
+    if (isClosed) { alert("هذا المزوّد مغلق حالياً ولا يستقبل طلبات"); return; }
+    if (busyDays.includes(date)) { alert("المزوّد مشغول في هذا التاريخ، اختاري تاريخاً آخر"); return; }
     // منع التواريخ الماضية
     const today = new Date(); today.setHours(0, 0, 0, 0);
     if (new Date(date) < today) { alert("لا يمكن اختيار تاريخ في الماضي"); return; }
     setLoading2(true);
     try {
       const functions = getFunctions();
+      const au = getAuth();
+      if (au.currentUser) {
+        try { await updateDoc(doc(db, "users", au.currentUser.uid), { address: address.trim() }); } catch {}
+      }
       const createServiceBooking = httpsCallable(functions, "createServiceBookingSecure");
 
       const result: any = await createServiceBooking({
         providerId: id,
         productId: selectedProduct.id,
-        date, time, notes,
+        date, time, notes, address: address.trim(),
         addons: selectedAddons,
         paymentMethod: payMethod === "cod" ? "cod" : "online",
       });
@@ -220,13 +240,15 @@ export default function ServiceBookPage() {
         )}
 
         <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 6, textAlign: "right" }}>تاريخ الموعد</div>
-        <input type="date" style={inp} value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split("T")[0]} />
+        <input type="date" style={{ ...inp, ...(date && busyDays.includes(date) ? { borderColor: "#E74C3C", background: "#FDF0F0" } : {}) }} value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split("T")[0]} />
+        {date && busyDays.includes(date) && <div style={{ fontSize: 12, color: "#E74C3C", fontWeight: 700, marginTop: 6, textAlign: "right" }}>⚠️ المزوّد مشغول في هذا التاريخ، اختاري يوماً آخر</div>}
 
         <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 6, textAlign: "right" }}>وقت الموعد</div>
         <input type="time" style={inp} value={time} onChange={e => setTime(e.target.value)} />
 
         <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 6, textAlign: "right" }}>ملاحظات (اختياري)</div>
         <textarea style={{ ...inp, height: 80, resize: "none" }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="أي تفاصيل إضافية..." />
+        <textarea style={{ ...inp, height: 70, resize: "none", marginTop: 12 }} value={address} onChange={e => setAddress(e.target.value)} placeholder="عنوان تنفيذ الخدمة / التواصل (المنطقة، المبنى، الشارع...)" />
 
         {selectedProduct && (
           <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #C9A96E", padding: "16px 18px", marginBottom: 16 }}>
