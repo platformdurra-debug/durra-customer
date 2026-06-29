@@ -138,6 +138,17 @@ export default function ServiceSlugPage() {
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: status.dot }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: status.color }}>{status.label}</span>
           </div>
+          {provider.isLocationBased && (
+            <div style={{ width: "100%", marginTop: 14, background: "#fff", borderRadius: 16, border: "1px solid #E8DDD0", padding: "14px 16px", textAlign: "right" }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#A07840", marginBottom: 8 }}>📍 زورينا في المحل</div>
+              {provider.address && <div style={{ fontSize: 13, color: "#5A4A38", lineHeight: 1.7, marginBottom: 10 }}>{provider.address}</div>}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {provider.whatsapp && <a href={`https://wa.me/${String(provider.whatsapp).replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: "#25D366", background: "rgba(37,211,102,0.1)", padding: "7px 14px", borderRadius: 10, textDecoration: "none" }}>واتساب</a>}
+                {provider.instagram && <a href={`https://instagram.com/${String(provider.instagram).replace(/[@\s]/g, "")}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: "#C13584", background: "rgba(193,53,132,0.1)", padding: "7px 14px", borderRadius: 10, textDecoration: "none" }}>انستقرام</a>}
+                {provider.snapchat && <a href={`https://snapchat.com/add/${String(provider.snapchat).replace(/[@\s]/g, "")}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: "#C9A12B", background: "rgba(255,252,0,0.18)", padding: "7px 14px", borderRadius: 10, textDecoration: "none" }}>سناب شات</a>}
+              </div>
+            </div>
+          )}
         </div>
 
         {provider.rating > 0 && (
