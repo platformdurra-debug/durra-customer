@@ -25,6 +25,7 @@ export default function ServiceBookPage() {
   const [address, setAddress] = useState("");
   const [busyDays, setBusyDays] = useState<string[]>([]);
   const [isClosed, setIsClosed] = useState(false);
+  const [isLocationBased, setIsLocationBased] = useState(false);
   const [loading2, setLoading2] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [onlineEnabled, setOnlineEnabled] = useState(true);
@@ -46,6 +47,7 @@ export default function ServiceBookPage() {
         setProvider(pdata);
         setBusyDays(pdata.busyDays || []);
         setIsClosed(pdata.closed === true);
+        setIsLocationBased(pdata.isLocationBased === true);
       }
       const prods = prodSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setProducts(prods);
@@ -92,7 +94,7 @@ export default function ServiceBookPage() {
       setEmailVerified(true);
     }
     if (!date || !time || !selectedProduct) { alert("أكملي جميع الحقول"); return; }
-    if (!address.trim()) { alert("أضيفي عنوان تنفيذ الخدمة / التواصل"); return; }
+    if (!isLocationBased && !address.trim()) { alert("أضيفي عنوان تنفيذ الخدمة / التواصل"); return; }
     if (isClosed) { alert("هذا المزوّد مغلق حالياً ولا يستقبل طلبات"); return; }
     if (busyDays.includes(date)) { alert("المزوّد مشغول في هذا التاريخ، اختاري تاريخاً آخر"); return; }
     // منع التواريخ الماضية
@@ -248,7 +250,13 @@ export default function ServiceBookPage() {
 
         <div style={{ fontSize: 12, color: "#6B5744", fontWeight: 600, marginBottom: 6, textAlign: "right" }}>ملاحظات (اختياري)</div>
         <textarea style={{ ...inp, height: 80, resize: "none" }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="أي تفاصيل إضافية..." />
-        <textarea style={{ ...inp, height: 70, resize: "none", marginTop: 12 }} value={address} onChange={e => setAddress(e.target.value)} placeholder="عنوان تنفيذ الخدمة / التواصل (المنطقة، المبنى، الشارع...)" />
+        {isLocationBased ? (
+          <div style={{ ...inp, height: "auto", marginTop: 12, background: "#FFF8EC", border: "1px solid #E8D5A3", color: "#8A6D3B", fontSize: 12.5, lineHeight: 1.7, textAlign: "right" }}>
+            📍 هذه خدمة بموقع — ستذهبين لمقر المزوّد. لا حاجة لإدخال عنوانك.
+          </div>
+        ) : (
+          <textarea style={{ ...inp, height: 70, resize: "none", marginTop: 12 }} value={address} onChange={e => setAddress(e.target.value)} placeholder="عنوان تنفيذ الخدمة / التواصل (المنطقة، المبنى، الشارع...)" />
+        )}
 
         {selectedProduct && (
           <div style={{ background: "#fff", borderRadius: 18, border: "1.5px solid #C9A96E", padding: "16px 18px", marginBottom: 16 }}>
