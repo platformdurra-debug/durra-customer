@@ -202,6 +202,17 @@ export default function ServiceSlugPage() {
                     {p.hasDelivery && (
                       <div style={{ fontSize: 11, color: "#2D8A5E", textAlign: "right", marginTop: 8, fontWeight: 600 }}>🚚 خدمة توصيل متوفرة{p.deliveryPrice ? ` (${p.deliveryPrice} د.ب)` : ""}</div>
                     )}
+                    {provider.closed ? (
+                      <button disabled style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", background: "#E5E0D8", color: "#9B8E7E", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 14, cursor: "not-allowed", marginTop: 12 }}>
+                        المحل مغلق حالياً
+                      </button>
+                    ) : (
+                      <Link href={`/services/${slug}/book?product=${p.id}`} style={{ textDecoration: "none" }}>
+                        <button style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1A0A", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 14, boxShadow: "0 3px 12px rgba(201,169,110,0.25)", marginTop: 12 }}>
+                          اطلب هذه الخدمة
+                        </button>
+                      </Link>
+                    )}
                   </div>
                 </div>
               ))}
@@ -209,16 +220,8 @@ export default function ServiceSlugPage() {
           </div>
         )}
 
-        {provider.closed ? (
-          <button disabled style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "#E5E0D8", color: "#9B8E7E", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, cursor: "not-allowed" }}>
-            المحل مغلق حالياً
-          </button>
-        ) : (
-        <Link href={`/services/${slug}/book`}>
-          <button style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1A0A", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, boxShadow: "0 4px 16px rgba(201,169,110,0.3)" }}>
-            احجزي الآن
-          </button>
-        </Link>
+        {products.length === 0 && (
+          <div style={{ textAlign: "center", color: "#9B7E60", padding: "30px 0", fontSize: 14 }}>لا توجد خدمات معروضة حالياً</div>
         )}
       </div>
       <Navbar />
