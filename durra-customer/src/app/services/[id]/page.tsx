@@ -178,11 +178,17 @@ export default function ServiceSlugPage() {
           </div>
         )}
 
+        {provider.closed ? (
+          <button disabled style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", background: "#E5E0D8", color: "#9B8E7E", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, cursor: "not-allowed" }}>
+            المحل مغلق حالياً
+          </button>
+        ) : (
         <Link href={`/services/${slug}/book`}>
           <button style={{ width: "100%", padding: "15px", borderRadius: 16, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #C9A96E, #E8D5A3)", color: "#2C1A0A", fontFamily: "Tajawal, sans-serif", fontWeight: 700, fontSize: 15, boxShadow: "0 4px 16px rgba(201,169,110,0.3)" }}>
             احجزي الآن
           </button>
         </Link>
+        )}
       </div>
       <Navbar />
     </div>
