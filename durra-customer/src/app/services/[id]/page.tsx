@@ -156,16 +156,41 @@ export default function ServiceSlugPage() {
         {products.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 700, color: "#2C1A0A", marginBottom: 14, textAlign: "right" }}>✦ الخدمات والأسعار</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {products.map(p => (
-                <div key={p.id} style={{ background: "#fff", borderRadius: 18, border: "1px solid #E8DDD0", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(44,26,10,0.04)" }}>
-                  <div style={{ textAlign: "left" }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: "#A07840" }}>{p.price} <span style={{ fontSize: 11 }}>د.ب</span></div>
-                    {p.duration && <div style={{ fontSize: 11, color: "#9B7E60" }}>{p.duration}</div>}
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1A0A", marginBottom: 2 }}>{p.name}</div>
-                    {p.description && <div style={{ fontSize: 11, color: "#9B7E60" }}>{p.description}</div>}
+                <div key={p.id} style={{ background: "#fff", borderRadius: 18, border: "1px solid #E8DDD0", overflow: "hidden", boxShadow: "0 2px 10px rgba(44,26,10,0.05)" }}>
+                  {/* صور الخدمة */}
+                  {p.images && p.images.length > 0 && (
+                    <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: p.images.length > 1 ? 6 : 0 }}>
+                      {p.images.map((img: string, idx: number) => (
+                        <img key={idx} src={img} style={{ width: p.images.length > 1 ? 200 : "100%", height: 160, objectFit: "cover", borderRadius: p.images.length > 1 ? 12 : 0, flexShrink: 0 }} />
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ padding: "14px 18px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: "#A07840", whiteSpace: "nowrap" }}>{p.price} <span style={{ fontSize: 11 }}>د.ب</span></div>
+                      <div style={{ textAlign: "right", flex: 1, marginRight: 10 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "#2C1A0A" }}>{p.name}</div>
+                        {p.duration && <div style={{ fontSize: 11, color: "#9B7E60", marginTop: 2 }}>⏱ {p.duration}</div>}
+                      </div>
+                    </div>
+                    {p.description && <div style={{ fontSize: 12.5, color: "#7A6A58", lineHeight: 1.7, textAlign: "right", marginBottom: p.addons?.length ? 10 : 0 }}>{p.description}</div>}
+                    {/* الإضافات */}
+                    {p.addons && p.addons.length > 0 && (
+                      <div style={{ borderTop: "1px dashed #E8DDD0", paddingTop: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#9B7E60", textAlign: "right", marginBottom: 6 }}>✨ إضافات اختيارية</div>
+                        {p.addons.map((a: any, idx: number) => (
+                          <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#5A4A38", padding: "3px 0" }}>
+                            <span style={{ fontWeight: 700, color: "#A07840" }}>+{a.price} د.ب</span>
+                            <span>{a.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {p.hasDelivery && (
+                      <div style={{ fontSize: 11, color: "#2D8A5E", textAlign: "right", marginTop: 8, fontWeight: 600 }}>🚚 خدمة توصيل متوفرة{p.deliveryPrice ? ` (${p.deliveryPrice} د.ب)` : ""}</div>
+                    )}
                   </div>
                 </div>
               ))}
