@@ -92,14 +92,19 @@ export default function DressDetailPage() {
           </svg>
         </button>
 
-        {dress.images && dress.images.length > 1 && (
-          <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, display: "flex", justifyContent: "center", gap: 6 }}>
-            {dress.images.map((_: any, i: number) => (
-              <button key={i} onClick={() => setActiveImg(i)} style={{ width: activeImg === i ? 20 : 6, height: 6, borderRadius: 3, border: "none", cursor: "pointer", background: activeImg === i ? "#C9A96E" : "rgba(255,255,255,0.6)", transition: "all 0.2s", padding: 0 }} />
-            ))}
-          </div>
-        )}
       </div>
+
+      {/* صور مصغّرة - اضغطي لتكبير الصورة */}
+      {dress.images && dress.images.length > 1 && (
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "12px 20px 0", scrollbarWidth: "none" }}>
+          {dress.images.map((img: string, i: number) => (
+            <button key={i} onClick={() => setActiveImg(i)}
+              style={{ flexShrink: 0, width: 60, height: 76, borderRadius: 10, overflow: "hidden", padding: 0, cursor: "pointer", border: activeImg === i ? "2.5px solid #C9A96E" : "2px solid transparent", opacity: activeImg === i ? 1 : 0.65, transition: "all 0.2s" }}>
+              <img src={img} alt={`صورة ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ padding: "20px 20px 0" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
