@@ -210,14 +210,23 @@ export default function ServiceBookPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {(preProductId ? products.filter(p => p.id === preProductId) : products).map(p => (
                 <div key={p.id} onClick={() => { if (!preProductId) { setSelectedProduct(p); setSelectedAddons([]); } }}
-                  style={{ background: selectedProduct?.id === p.id ? "rgba(201,169,110,0.08)" : "#fff", borderRadius: 16, border: `1.5px solid ${selectedProduct?.id === p.id ? "#C9A96E" : "#EDE8DF"}`, padding: "14px 16px", cursor: preProductId ? "default" : "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.2s" }}>
-                  <div style={{ textAlign: "left" }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: "#A07840" }}>{p.price} <span style={{ fontSize: 11 }}>د.ب</span></div>
-                    {p.duration && <div style={{ fontSize: 11, color: "#9B7E60" }}>{p.duration}</div>}
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1810" }}>{p.name}</div>
-                    {p.description && <div style={{ fontSize: 11, color: "#9B7E60" }}>{p.description}</div>}
+                  style={{ background: selectedProduct?.id === p.id ? "rgba(201,169,110,0.08)" : "#fff", borderRadius: 16, border: `1.5px solid ${selectedProduct?.id === p.id ? "#C9A96E" : "#EDE8DF"}`, padding: 0, cursor: preProductId ? "default" : "pointer", overflow: "hidden", transition: "all 0.2s" }}>
+                  {p.images && p.images.length > 0 && (
+                    <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: p.images.length > 1 ? 6 : 0 }}>
+                      {p.images.map((img: string, idx: number) => (
+                        <img key={idx} src={img} style={{ width: p.images.length > 1 ? 180 : "100%", height: 150, objectFit: "cover", borderRadius: p.images.length > 1 ? 12 : 0, flexShrink: 0 }} />
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ textAlign: "left" }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: "#A07840", whiteSpace: "nowrap" }}>{p.price} <span style={{ fontSize: 11 }}>د.ب</span></div>
+                      {p.duration && <div style={{ fontSize: 11, color: "#9B7E60" }}>{p.duration}</div>}
+                    </div>
+                    <div style={{ textAlign: "right", flex: 1, marginRight: 10 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#2C1810" }}>{p.name}</div>
+                      {p.description && <div style={{ fontSize: 11, color: "#9B7E60", lineHeight: 1.6, marginTop: 2 }}>{p.description}</div>}
+                    </div>
                   </div>
                 </div>
               ))}
