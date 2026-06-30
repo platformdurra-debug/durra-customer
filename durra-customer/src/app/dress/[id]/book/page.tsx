@@ -20,7 +20,7 @@ export default function BookPage() {
   const [endDate, setEndDate] = useState("");
   const [weddingDate, setWeddingDate] = useState("");
 
-  const isWedding = dress?.rentalType === "wedding";
+  const isWedding = (dress?.rentalDays || 1) > 1;
   const rentalDays = dress?.rentalDays || (isWedding ? 3 : 1);
 
   useEffect(() => {
@@ -95,7 +95,7 @@ export default function BookPage() {
   };
 
   // للعرض فقط — الحساب الفعلي في السيرفر
-  const rentalPrice = dress ? dress.price * calcDays() : 0;
+  const rentalPrice = dress ? (isWedding ? dress.price : dress.price * calcDays()) : 0;
   const totalPrice  = rentalPrice + deliveryPrice + depositAmount;
 
   const handleBook = async () => {
@@ -206,7 +206,7 @@ export default function BookPage() {
             <img src={dress.images?.[0]} alt={dress.name} style={{ width: 80, height: 96, objectFit: "cover", borderRadius: 12 }} />
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#2C1810", marginBottom: 4 }}>{dress.name}</div>
-              <div style={{ fontSize: 13, color: "#C9A96E", fontWeight: 700 }}>{dress.price} د.ب / يوم</div>
+              <div style={{ fontSize: 13, color: "#C9A96E", fontWeight: 700 }}>{dress.price} د.ب {isWedding ? `/ باقة (${rentalDays} أيام)` : "/ يوم"}</div>
             </div>
           </div>
         )}
@@ -277,7 +277,7 @@ export default function BookPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 13, color: "#A07840", fontWeight: 600 }}>{rentalPrice} د.ب</span>
-                <span style={{ fontSize: 13, color: "#9B8577" }}>{dress?.price} د.ب × {calcDays()} أيام</span>
+                <span style={{ fontSize: 13, color: "#9B8577" }}>{isWedding ? `باقة الزفاف (${rentalDays} أيام)` : `${dress?.price} د.ب × ${calcDays()} أيام`}</span>
               </div>
               {deliveryPrice > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
