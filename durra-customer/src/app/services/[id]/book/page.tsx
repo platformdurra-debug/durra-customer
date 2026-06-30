@@ -206,11 +206,11 @@ export default function ServiceBookPage() {
 
         {products.length > 0 && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, color: "#6B5744", fontWeight: 600, marginBottom: 10, textAlign: "right" }}>اختاري الخدمة</div>
+            <div style={{ fontSize: 13, color: "#6B5744", fontWeight: 600, marginBottom: 10, textAlign: "right" }}>{preProductId ? "الخدمة المختارة" : "اختاري الخدمة"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {products.map(p => (
-                <div key={p.id} onClick={() => { setSelectedProduct(p); setSelectedAddons([]); }}
-                  style={{ background: selectedProduct?.id === p.id ? "rgba(201,169,110,0.08)" : "#fff", borderRadius: 16, border: `1.5px solid ${selectedProduct?.id === p.id ? "#C9A96E" : "#EDE8DF"}`, padding: "14px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.2s" }}>
+              {(preProductId ? products.filter(p => p.id === preProductId) : products).map(p => (
+                <div key={p.id} onClick={() => { if (!preProductId) { setSelectedProduct(p); setSelectedAddons([]); } }}
+                  style={{ background: selectedProduct?.id === p.id ? "rgba(201,169,110,0.08)" : "#fff", borderRadius: 16, border: `1.5px solid ${selectedProduct?.id === p.id ? "#C9A96E" : "#EDE8DF"}`, padding: "14px 16px", cursor: preProductId ? "default" : "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.2s" }}>
                   <div style={{ textAlign: "left" }}>
                     <div style={{ fontSize: 16, fontWeight: 800, color: "#A07840" }}>{p.price} <span style={{ fontSize: 11 }}>د.ب</span></div>
                     {p.duration && <div style={{ fontSize: 11, color: "#9B7E60" }}>{p.duration}</div>}
