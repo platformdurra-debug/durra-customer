@@ -104,7 +104,7 @@ export default function OrderDetailPage() {
   const deliveryPrice = order.deliveryPrice || 0;
   const depositAmount = order.depositAmount || 0;
   const totalPrice   = order.totalPrice   || 0;
-  const canCancel = order.status === "pending";
+  const canCancel = order.status !== "completed" && order.status !== "cancelled";
   const canComplain = order.status === "confirmed" || order.status === "completed";
 
   return (
