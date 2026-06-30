@@ -60,9 +60,12 @@ export default function BookPage() {
       getDoc(doc(db, "settings", "payment")),
     ]).then(([dressSnap, settingsSnap, paySnap]) => {
       if (dressSnap.exists()) setDress({ id: dressSnap.id, ...dressSnap.data() } as Dress);
+      const dressData: any = dressSnap.exists() ? dressSnap.data() : {};
       if (settingsSnap.exists()) {
         setDeliveryPrice(settingsSnap.data()?.deliveryPrice || 0);
-        setDepositAmount(settingsSnap.data()?.depositAmount || 0);
+        // تأمين الفستان المحدد إن وُجد، وإلا الافتراضي العام
+        const dDep = dressData.depositAmount;
+        setDepositAmount((dDep !== undefined && dDep !== null) ? dDep : (settingsSnap.data()?.depositAmount || 0));
       }
       if (paySnap.exists()) {
         const pd = paySnap.data();
