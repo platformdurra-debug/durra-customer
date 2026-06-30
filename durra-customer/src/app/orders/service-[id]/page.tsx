@@ -100,7 +100,7 @@ export default function ServiceOrderDetailPage() {
   );
 
   const s = STATUS[order.status] || STATUS.pending;
-  const canCancel = order.status === "pending";
+  const canCancel = order.status !== "completed" && order.status !== "cancelled";
   const canComplain = order.status === "confirmed" || order.status === "completed";
 
   return (
